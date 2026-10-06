@@ -1,14 +1,18 @@
 // Builds the league from the chain: every pool the scan found that pairs a coin with a tokenized
-// stock, with balances, prices and market caps read on-chain through Multicall3.
-import { readFileSync, existsSync } from 'node:fs';
+// stock, with balances, prices and market caps read on-chain through Multicall3. Binance's Market
+// API then adds 24h volume, 24h change, holders and logos for the coins that make the default list.
+import { readFileSync, existsSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { multicallAll, addrWord, word, toAddr, toNum, toText } from './chain.mjs';
+import { bw3 } from './binance.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
+const SCAN = root + 'data/stock-pairs.json';
 const USDT = '0x55d398326f99059ff775485246999027b3197955';
 const DEAD = '0x000000000000000000000000000000000000dead';
 const V2_FACTORY = '0xca143ce32fe78f1f7019d7d551a6402fc5350c73', V3_FACTORY = '0x0bfbcf9fa4f9c56b0f40a671ad40e0805a091865';
 const V3_FEES = [100, 500, 2500, 10000];
+const MIN_MCAP = 100000, MIN_STOCK_USD = 1000, FULL_PASS_MS = 20 * 60000;
 // Tokens that are money, not memes: a stock/USDT pool is not a stock meme.
 const CASH = new Set([
   USDT, '0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c', '0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d', '0xe9e7cea3dedca5984780bafc599bd69add087d56',
@@ -22,11 +26,16 @@ const NAMES = {
   OPENAI: 'OpenAI', POLYMARKET: 'Polymarket', KLSH: 'Kalshi', TQQQ: 'Nasdaq 3x', SQQQ: 'Nasdaq -3x', ORCL: 'Oracle', AVGO: 'Broadcom',
   PYPL: 'PayPal', IBM: 'IBM', ARM: 'Arm', DELL: 'Dell', ADBE: 'Adobe', CRM: 'Salesforce', PDD: 'PDD', DJT: 'Trump Media', RDDT: 'Reddit',
   EWY: 'South Korea ETF', QCOM: 'Qualcomm', GS: 'Goldman Sachs', ASML: 'ASML', SMCI: 'Supermicro', MRNA: 'Moderna', HIMS: 'Hims & Hers',
+  SKHY: 'SK Hynix',
 };
 
+// Binance's saved RWA list adds Chinese names and logos to the stock tokens it covers.
+const rwa = existsSync(root + 'data/rwa-tokens.json')
+  ? new Map(JSON.parse(readFileSync(root + 'data/rwa-tokens.json', 'utf8')).tokens.map((t) => [t.address, t])) : new Map();
 export const stocks = readFileSync(root + 'data/bsc-stock-tokens.csv', 'utf8').trim().split('\n').slice(1).map((line) => {
-  const [symbol, address, ticker, type, multiplier] = line.split(',');
-  return { symbol, address: '0x' + address, ticker, name: NAMES[ticker] || ticker, type: Number(type), multiplier: Number(multiplier) };
+  const [symbol, hex, ticker, type, multiplier] = line.split(',');
+  const address = '0x' + hex, extra = rwa.get(address);
+  return { symbol, address, ticker, name: NAMES[ticker] || ticker, nameZh: extra?.nameZh || null, logo: extra?.logo || null, type: Number(type), multiplier: Number(multiplier) };
 });
 const stockByAddr = new Map(stocks.map((s) => [s.address, s]));
 
@@ -64,53 +73,93 @@ export async function stockPrices() {
   return best;
 }
 
-let cache = null, building = null;
+// What stays in memory between builds.
+const S = { mtime: 0, scan: null, pools: [], live: null, fullAt: 0, coins: new Map(), market: new Map(), logos: new Map() };
 
-async function build() {
-  const file = root + 'data/stock-pairs.json';
-  if (!existsSync(file)) throw new Error('No scan yet. Run: node scripts/scan-pairs.mjs');
-  const scan = JSON.parse(readFileSync(file, 'utf8'));
-  const prices = await stockPrices();
-  const pools = scan.pairs
+function loadScan() {
+  if (!existsSync(SCAN)) throw new Error('No scan yet. Run: node scripts/scan-pairs.mjs');
+  const mtime = statSync(SCAN).mtimeMs;
+  if (mtime === S.mtime) return;
+  const scan = JSON.parse(readFileSync(SCAN, 'utf8'));
+  S.pools = scan.pairs
     .map((p) => (p.stock0 ? { pair: p.pair, index: p.index, stock: p.token0, coin: p.token1 } : { pair: p.pair, index: p.index, stock: p.token1, coin: p.token0 }))
     .filter((p) => !stockByAddr.has(p.coin) && !CASH.has(p.coin));
+  S.scan = { from: scan.scannedFrom, to: scan.scannedTo, at: scan.updatedAt };
+  S.mtime = mtime; S.live = null;
+}
 
-  // 1. How much stock sits in every pool the scan found.
-  const held = await multicallAll(pools.map((p) => [p.stock, '70a08231' + addrWord(p.pair)]));
-  const live = [];
-  pools.forEach((p, i) => {
-    const s = stockByAddr.get(p.stock), shares = held[i] ? toNum(held[i]) : 0, price = prices[s.symbol]?.price || 0;
-    if (shares * price >= 50) live.push({ ...p, s, shares, stockUsd: shares * price });
-  });
+// The slow pass: which of the 200,000-odd pools hold any stock at all. Runs every 20 minutes.
+async function fullPass(prices) {
+  const held = await multicallAll(S.pools.map((p) => [p.stock, '70a08231' + addrWord(p.pair)]));
+  S.live = S.pools.filter((p, i) => (held[i] ? toNum(held[i]) : 0) * (prices[stockByAddr.get(p.stock).symbol]?.price || 0) >= 50);
+  S.fullAt = Date.now();
+}
 
-  // 2. Coin details for the pools that hold stock.
-  const info = await multicallAll(live.flatMap((p) => [
-    [p.coin, '70a08231' + addrWord(p.pair)], [p.coin, '18160ddd'], [p.coin, '313ce567'],
-    [p.coin, '95d89b41'], [p.coin, '06fdde03'], [p.coin, '70a08231' + addrWord(DEAD)],
+// Binance Market API extras for the coins on the default list. Left as they were if Binance is unreachable.
+async function enrich(rows) {
+  const listed = rows.filter((r) => r.mcap >= MIN_MCAP && r.stockUsd >= MIN_STOCK_USD);
+  try {
+    for (let i = 0; i < listed.length; i += 50) {
+      const data = await bw3('/api/v1/dex/market/price-info', {
+        method: 'POST', body: listed.slice(i, i + 50).map((r) => ({ binanceChainId: '56', tokenContractAddress: r.address })),
+      });
+      for (const x of data || [])
+        S.market.set(x.tokenContractAddress.toLowerCase(), { vol24: Number(x.volume24H) || 0, change24: Number(x.priceChange24H) / 100 || 0, holders: x.holders ?? null });
+    }
+    // Logos never change, so each coin is asked for once; a few per build keeps under the rate limit.
+    for (const r of listed.filter((r) => !S.logos.has(r.address)).slice(0, 25)) {
+      const info = await bw3('/api/v1/dex/market/token/basic-info', { method: 'POST', params: { binanceChainId: '56', tokenContractAddress: r.address }, body: {} });
+      S.logos.set(r.address, info?.tokenLogoUrl || null);
+      await new Promise((res) => setTimeout(res, 220));
+    }
+  } catch { /* keep whatever was fetched before */ }
+  for (const r of rows) Object.assign(r, S.market.get(r.address), S.logos.has(r.address) ? { logo: S.logos.get(r.address) } : null);
+}
+
+async function build() {
+  loadScan();
+  const prices = await stockPrices();
+  if (!S.live || Date.now() - S.fullAt > FULL_PASS_MS) await fullPass(prices);
+
+  // Symbol, name and decimals are read once per coin.
+  const fresh = S.live.filter((p) => !S.coins.has(p.coin));
+  const meta = await multicallAll(fresh.flatMap((p) => [[p.coin, '313ce567'], [p.coin, '95d89b41'], [p.coin, '06fdde03']]));
+  fresh.forEach((p, i) => S.coins.set(p.coin, {
+    decimals: meta[3 * i] ? parseInt(meta[3 * i].slice(0, 64), 16) : 18, symbol: toText(meta[3 * i + 1]) || '?', name: toText(meta[3 * i + 2]),
+  }));
+
+  const bal = await multicallAll(S.live.flatMap((p) => [
+    [p.stock, '70a08231' + addrWord(p.pair)], [p.coin, '70a08231' + addrWord(p.pair)], [p.coin, '18160ddd'], [p.coin, '70a08231' + addrWord(DEAD)],
   ]));
-  const rows = live.map((p, i) => {
-    const [inPool, supply, dec, sym, name, burned] = info.slice(6 * i, 6 * i + 6);
-    const decimals = dec ? parseInt(dec.slice(0, 64), 16) : 18;
-    const coinInPool = inPool ? toNum(inPool, decimals) : 0, total = supply ? toNum(supply, decimals) : 0, dead = burned ? toNum(burned, decimals) : 0;
-    const price = coinInPool ? p.stockUsd / coinInPool : 0;
-    return {
-      coin: toText(sym) || '?', coinName: toText(name), address: p.coin, pair: p.pair, index: p.index,
-      sym: p.s.symbol, name: p.s.name, ticker: p.s.ticker, stock: p.stock,
-      shares: p.shares, stockUsd: p.stockUsd, coinInPool, price, mcap: price * Math.max(0, total - dead),
-    };
-  }).filter((r) => r.price > 0).sort((a, b) => b.stockUsd - a.stockUsd);
+  const rows = [];
+  S.live.forEach((p, i) => {
+    const s = stockByAddr.get(p.stock), c = S.coins.get(p.coin), [inStock, inCoin, supply, burned] = bal.slice(4 * i, 4 * i + 4);
+    const shares = inStock ? toNum(inStock) : 0, stockUsd = shares * (prices[s.symbol]?.price || 0);
+    const coinInPool = inCoin ? toNum(inCoin, c.decimals) : 0;
+    if (stockUsd < 50 || !coinInPool) return;
+    const price = stockUsd / coinInPool, total = supply ? toNum(supply, c.decimals) : 0, dead = burned ? toNum(burned, c.decimals) : 0;
+    rows.push({
+      coin: c.symbol, coinName: c.name, address: p.coin, pair: p.pair, index: p.index,
+      sym: s.symbol, name: s.name, ticker: s.ticker, stock: p.stock,
+      shares, stockUsd, coinInPool, price, mcap: price * Math.max(0, total - dead),
+    });
+  });
+  rows.sort((a, b) => b.stockUsd - a.stockUsd);
+  await enrich(rows);
 
   return {
     updatedAt: new Date().toISOString(),
-    scan: { from: scan.scannedFrom, to: scan.scannedTo, at: scan.updatedAt },
+    scan: S.scan,
     stats: {
-      poolsFound: pools.length, holdingStock: rows.length, over100k: rows.filter((r) => r.mcap >= 100000).length,
+      poolsFound: S.pools.length, holdingStock: rows.length, over100k: rows.filter((r) => r.mcap >= MIN_MCAP && r.stockUsd >= MIN_STOCK_USD).length,
       stockUsd: rows.reduce((a, r) => a + r.stockUsd, 0),
     },
-    stocks: Object.fromEntries(stocks.map((s) => [s.symbol, { address: s.address, name: s.name, ticker: s.ticker, price: prices[s.symbol]?.price || null }])),
+    stocks: Object.fromEntries(stocks.map((s) => [s.symbol, { address: s.address, name: s.name, nameZh: s.nameZh, ticker: s.ticker, logo: s.logo, price: prices[s.symbol]?.price || null }])),
     rows,
   };
 }
+
+let cache = null, building = null;
 
 // The league is rebuilt at most once every `maxAgeMs`; callers in between get the cached copy.
 export async function league(maxAgeMs = 120000) {

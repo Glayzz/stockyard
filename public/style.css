@@ -54,7 +54,7 @@ a { color: inherit; text-decoration: none; }
 /* league hero */
 .hero { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 34px; align-items: center; padding: 28px 0 36px; }
 .hero h1 { font-family: var(--display); font-weight: 400; font-size: clamp(28px, 4.4vw, 50px); line-height: 1.05; margin: 14px 0 0; }
-.hero .big { display: inline-block; font-family: var(--display); font-size: clamp(64px, 12.5vw, 148px); line-height: .95; background: var(--yellow); border: 4px solid var(--ink); border-radius: 20px; padding: 8px 20px 12px; margin: 12px 0 14px; box-shadow: 9px 9px 0 var(--ink); transform: rotate(-1.4deg); font-variant-numeric: tabular-nums; }
+.hero .big { display: inline-block; white-space: nowrap; font-family: var(--display); font-size: clamp(52px, 9.2vw, 122px); line-height: .95; background: var(--yellow); border: 4px solid var(--ink); border-radius: 20px; padding: 8px 20px 12px; margin: 12px 0 14px; box-shadow: 9px 9px 0 var(--ink); transform: rotate(-1.4deg); font-variant-numeric: tabular-nums; }
 .hero .sub { font-size: 18px; max-width: 560px; margin: 18px 0 0; }
 .hero .sub b { background: linear-gradient(transparent 58%, var(--yellow) 58%); font-weight: 700; }
 .teaser { display: block; background: var(--card); border: var(--bd); box-shadow: 8px 8px 0 var(--ink); padding: 22px 22px 26px; transform: rotate(2.4deg); font-family: var(--mono); position: relative; transition: transform .15s; }

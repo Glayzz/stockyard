@@ -4,8 +4,9 @@ The home for stock memes on BNB Chain: meme coins whose liquidity pool is quoted
 stock instead of BNB. Built by a member of the 牛马 NIUMA community for
 [BNB Hack: Tokenized Stocks Edition](https://www.bnbchain.org/en/hackathons/tokenized-stocks).
 
-More than 200 of these coins exist. Their pools hold millions of dollars of bStocks, some of them
-pay holders in stock, and until now there was no tool built for them.
+An on-chain scan on 6 October 2026 found 202,703 PancakeSwap v2 pools that pair a coin with a
+tokenized stock. 3,549 of them held stock that day, $15.8M in total, and 55 of those coins were
+worth $100K or more. Some pay their holders in stock. Until now there was no tool built for them.
 
 ## What it does
 
@@ -19,7 +20,8 @@ pay holders in stock, and until now there was no tool built for them.
 
 Work in progress during the hackathon build window.
 
-- Working today: the three pages above, on live data.
+- Working today: the three pages above. The league is read from the chain (see below), with
+  logos, 24h volume, 24h change and holders from the Binance Web3 API.
 - In progress: moving the data layer to the Binance Web3 API. `server/binance.mjs` is the signed
   client, `server/routes.mjs` has the first routes (health, aggregator quote, wallet balances), and
   `scripts/probe.mjs` exercises RWA data, market, trading quotes and wallet balances.
@@ -52,6 +54,17 @@ node scripts/probe.mjs
 
 Binance checks the caller's location, so run these from a region its
 [restricted list](https://web3.binance.com/en/dev-docs/web3-api-prohibited-regions) allows.
+
+## How the league finds every stock meme
+
+1. `data/bsc-stock-tokens.csv` is Binance's list of tokenized stocks on BNB Chain.
+2. `node scripts/scan-pairs.mjs` walks PancakeSwap v2's pair list through Multicall3 and keeps
+   every pool where one side is on that list. The first run checks the newest 900,000 pairs and
+   takes about 25 minutes on public nodes; later runs only check new pairs.
+3. `server/league.mjs` prices each stock from its deepest USDT pool, then reads every pool's
+   balances, the coin's supply and its burned amount to get price and market cap.
+
+The scan output is too large for the repo, so run step 2 once before starting the server.
 
 ## Data sources
 

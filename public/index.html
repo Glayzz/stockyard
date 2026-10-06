@@ -52,6 +52,7 @@
       <div class="seg" id="sort">
         <button data-k="stockUsd" class="on">Stock held</button>
         <button data-k="mcap">Market cap</button>
+        <button data-k="vol24">24h volume</button>
       </div>
       <div class="seg" id="scope">
         <button data-all="0" class="on">$100K and up</button>
@@ -61,7 +62,7 @@
   </div>
   <div class="tablewrap">
     <table class="league">
-      <thead><tr><th>#</th><th>Coin</th><th>Trades against</th><th>Stock in its pool</th><th>Market cap</th><th>Coin price</th></tr></thead>
+      <thead><tr><th>#</th><th>Coin</th><th>Trades against</th><th>Stock in its pool</th><th>Market cap</th><th>24h volume</th></tr></thead>
       <tbody id="rows"><tr><td colspan="6" class="state">Loading pools</td></tr></tbody>
     </table>
   </div>
@@ -110,7 +111,7 @@ function render() {
   for (const b of Object.values(by).sort((x, y) => y.stockUsd - x.stockUsd))
     tiles.append(tile(b.sym, b.name, usd(b.stockUsd), num(b.shares) + ' shares · ' + b.n + (b.n === 1 ? ' coin' : ' coins')));
 
-  const list = (state.stock === 'ALL' ? shown : shown.filter((m) => m.sym === state.stock)).slice().sort((a, b) => b[state.sort] - a[state.sort]);
+  const list = (state.stock === 'ALL' ? shown : shown.filter((m) => m.sym === state.stock)).slice().sort((a, b) => (b[state.sort] || 0) - (a[state.sort] || 0));
   $('league-title').textContent = state.stock === 'ALL' ? 'The stock league' : 'The ' + STOCKS[state.stock][1] + ' league';
   const body = $('rows');
   body.replaceChildren();
@@ -127,17 +128,19 @@ function render() {
     const who = el('div', 'who');
     const names = el('div');
     names.append(el('span', 'coin', m.coin), el('span', 'addr', short(m.address)));
-    who.append(avatar(null, m.coin), names);
+    who.append(avatar(m.logo, m.coin), names);
     coin.append(who);
     const stock = el('td');
     stock.append(el('span', 'pill', m.name));
     const held = el('td', null, usd(m.stockUsd));
     held.append(el('span', 'shares', num(m.shares) + ' shares'));
-    tr.append(el('td', null, String(i + 1)), coin, stock, held, el('td', null, usd(m.mcap)), el('td', null, usd(m.price)));
+    const cap = el('td', null, usd(m.mcap));
+    if (m.change24 != null) cap.append(el('span', 'shares ' + (m.change24 >= 0 ? 'up' : 'down'), pct(m.change24) + ' today'));
+    tr.append(el('td', null, String(i + 1)), coin, stock, held, cap, el('td', null, m.vol24 != null ? usd(m.vol24) : '—'));
     tr.onclick = () => { location.href = 'coin.html?a=' + m.address; };
     body.append(tr);
   });
-  $('note').textContent = `Read straight from BNB Chain: PancakeSwap v2 pairs ${scan.from.toLocaleString('en-US')} to ${scan.to.toLocaleString('en-US')} were checked against Binance's list of tokenized stocks, then balances, supplies and prices were read from the contracts. Market cap is price times supply, minus burned tokens. The default list shows coins worth $100K or more with at least $1,000 of stock in the pool`
+  $('note').textContent = `Read straight from BNB Chain: PancakeSwap v2 pairs ${scan.from.toLocaleString('en-US')} to ${scan.to.toLocaleString('en-US')} were checked against Binance's list of tokenized stocks, then balances, supplies and prices were read from the contracts. Market cap is price times supply, minus burned tokens. Logos, 24h volume and 24h change come from the Binance Web3 API. The default list shows coins worth $100K or more with at least $1,000 of stock in the pool`
     + (list.length > 200 ? '; the first 200 rows are shown' : '') + '. Pool liquidity belongs to liquidity providers; it does not back the coin\'s price.';
   renderNiuma(rows);
 }
@@ -165,7 +168,7 @@ function renderNiuma(all) {
     rank(rankBy(peers, 'mcap'), me.name + ' by size'),
     rank(pos + 1, me.name + ' by stock'),
     rank(rankBy(all, 'stockUsd'), 'of ' + all.length.toLocaleString('en-US') + ' coins'));
-  box.replaceChildren(avatar(null, me.coin), left, ranks);
+  box.replaceChildren(avatar(me.logo, me.coin), left, ranks);
   box.href = 'coin.html?a=' + NIUMA;
   box.hidden = false;
 }

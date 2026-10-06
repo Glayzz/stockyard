@@ -8,3 +8,4 @@
 - 2026-10-06 Trading: aggregator/quote routes a Flap stock meme (NIUMA) into its quote stock (SPYB) in one hop through LiquidMesh, and into USDT through SPYB in two hops. priceImpactPercent came back as 0.0042 for a 0.42% impact, so it is a fraction despite the name.
 - 2026-10-06 Market: token/top-liquidity returns 15 pools for SPYB. PancakeSwap v2 has far more pools quoted in SPYB than that, so finding every stock-paired pool needed an on-chain scan of the factory's pair list. liquidityUsd and tokenAmount are null for some pools.
 - 2026-10-06 RWA: rwa/tokens with platformId=bstock returned 46 items while rwa/platforms reports 87 bStock tickers on BSC; not yet clear whether that is paging or a filter.
+- 2026-10-06T18:20:41.468Z call OK /api/v1/dex/market/rwa/platforms in 1098 ms
