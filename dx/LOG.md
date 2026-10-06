@@ -18,3 +18,7 @@
 - 2026-10-06 RWA: the keyed rwa/tokens list has 46 bStocks on BSC. Binance's public bapi list has 87, including BNCB, GMEB, DJTB and NFLXB, which have thousands of pools each. rwa/price and the underlying-* endpoints do not cover those.
 - 2026-10-06 Wallet: transactions-by-address returns methodId, which made it possible to tell holder payouts (0x84da2c7b) from ordinary transfers. limit=100 works; the cursor pages further back.
 - 2026-10-06 Wallet: token-balances-by-address accepts 20 tokens per call, so checking all 92 stock tokens for one wallet takes five calls.
+- 2026-10-06T22:25:57.659Z call FAILED /api/v1/dex/market/rwa/platforms in 10753 ms: UND_ERR_CONNECT_TIMEOUT fetch failed
+- 2026-10-06T22:32:15.549Z call FAILED /api/v1/dex/market/rwa/platforms in 10803 ms: UND_ERR_CONNECT_TIMEOUT fetch failed
+- 2026-10-06 Reliability: when the connection to web3.binance.com drops, every signed call waits about 10 seconds for a connect timeout, so a page that makes ten calls hangs. Added a breaker: after one connect failure, calls fail at once and a background check every 30 seconds restores them.
+- 2026-10-06 Wallet: reading one wallet's balance of 534 stock tokens through Multicall3 is a 120 KB request. On a slow uplink that alone is about 10 seconds; the Wallet API's 20-token limit would make it 27 signed calls instead.

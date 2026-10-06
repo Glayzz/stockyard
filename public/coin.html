@@ -23,6 +23,7 @@
   <a class="back" href="index.html" data-zh="← 全部股票 Meme">← All stock memes</a>
 
   <div id="page" hidden>
+    <p class="offline" id="offline" hidden data-zh="暂时连不上币安，所以价格历史、成交、报价和股票资料先不显示。下面的池子数据直接读自 BNB Chain，仍然是最新的。">Binance cannot be reached right now, so price history, trades, quotes and the stock's profile are missing. The pool numbers below are read straight from BNB Chain and are still current.</p>
     <div class="title" id="title"></div>
     <div class="meta" id="meta"></div>
     <div class="stats" id="stats"></div>
@@ -85,26 +86,16 @@
 initLang();
 const addr = (new URLSearchParams(location.search).get('a') || NIUMA).toLowerCase();
 const USDT = '0x55d398326f99059ff775485246999027b3197955';
-const S = { hours: 24, seen: new Set(), d: null, quotes: null, wallet: null, plan: null };
+const S = { hours: 24, seen: new Set(), d: null, quotes: null };
 
 const fail = (msg) => { $('page').hidden = true; $('state').hidden = false; $('state').textContent = msg; };
-const postJson = async (url, body) => {
-  const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
-  const j = await r.json();
-  if (!r.ok) throw new Error(j.error || r.status);
-  return j;
-};
 const apiJson = async (url) => { const r = await fetch(url); const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j; };
 
 async function loadCoin() { S.d = await apiJson('/api/coin?a=' + addr); }
 
 async function loadSafety() {
-  try {
-    const sec = Object.values((await getJson('https://api.gopluslabs.io/api/v1/token_security/56?contract_addresses=' + addr)).result || {})[0];
-    if (!sec) return;
-    S.buyTax = sec.buy_tax === '' ? null : Number(sec.buy_tax);
-    S.sellTax = sec.sell_tax === '' ? null : Number(sec.sell_tax);
-  } catch {}
+  const tax = await coinTax(addr);
+  if (tax) { S.buyTax = tax.buy; S.sellTax = tax.sell; }
 }
 
 function windowed(series, hours) {
@@ -136,6 +127,7 @@ const link = (text, href) => { const a = el('a', null, text); a.href = href; a.t
 
 function renderHead() {
   const { coin, stock, pool, pools } = S.d;
+  $('offline').hidden = S.d.binance;
   document.title = 'Stockyard · ' + coin.symbol;
   const chip = el('span', 'chip');
   chip.id = 'chg';
@@ -259,7 +251,7 @@ function amountUnits() {
 
 let quoteTimer = null, quoteRun = 0;
 function queueQuotes() {
-  S.quotes = null; S.plan = null;
+  S.quotes = null; trade.clear();
   clearTimeout(quoteTimer);
   renderSell();
   quoteTimer = setTimeout(loadQuotes, 450);
@@ -279,90 +271,32 @@ function renderSell() {
   $('amount-label').textContent = t(coin.symbol + ' to sell', '卖出 ' + coin.symbol + ' 数量');
   const opts = $('opts'), note = $('sell-note');
   opts.replaceChildren();
-  if (!amountUnits()) { note.textContent = t('Enter an amount to see what you would receive.', '输入数量，查看你能换到什么。'); renderTrade(); return; }
-  if (!S.quotes) { note.textContent = t('Getting quotes from Binance.', '正在向币安获取报价。'); renderTrade(); return; }
+  if (!amountUnits()) { note.textContent = t('Enter an amount to see what you would receive.', '输入数量，查看你能换到什么。'); trade.render(); return; }
+  if (!S.quotes) { note.textContent = t('Getting quotes from Binance.', '正在向币安获取报价。'); trade.render(); return; }
   const { keep, cash } = S.quotes;
   const hops = (q) => { const n = q.hops.length - 1; return zh ? n + ' 次兑换' : n + (n === 1 ? ' swap' : ' swaps'); };
   const opt = (k, tag, v, m, best) => { const o = el('div', 'opt' + (best ? ' best' : '')); const kk = el('div', 'k', k); if (tag) kk.append(el('span', null, tag)); o.append(kk, el('div', 'v', v), el('div', 'm', m)); return o; };
   const keepLabel = t('Keep the stock', '留下股票'), cashLabel = t('Take cash', '换成现金'), none = t('No quote', '无报价');
-  if (keep.error) opts.append(opt(keepLabel, null, none, keep.error, true));
+  if (keep.error) opts.append(opt(keepLabel, null, none, why(keep.error), true));
   else { const out = Number(keep.toAmount) / 1e18; opts.append(opt(keepLabel, hops(keep), num(out) + t(' shares', ' 股'), t(stock.name + ', worth about ', stockName(stock) + '，约值 ') + usd(out * (stock.price || 0)), true)); }
-  if (cash.error) opts.append(opt(cashLabel, null, none, cash.error));
+  if (cash.error) opts.append(opt(cashLabel, null, none, why(cash.error)));
   else opts.append(opt(cashLabel, hops(cash), usd(Number(cash.toAmount) / 1e18), t('in USDT', '以 USDT 计')));
-  note.textContent = keep.error ? t('Binance could not quote this amount.', '币安无法为这个数量报价。')
+  note.textContent = keep.error ? (offlineError(keep.error) ? t('Quotes come from Binance. They will show here once it can be reached again.', '报价来自币安，连上之后会显示在这里。') : t('Binance could not quote this amount.', '币安无法为这个数量报价。'))
     : zh ? `币安聚合器实时报价（${keep.vendor}）。价格影响 ${(keep.priceImpact * 100).toFixed(2)}%。` + (S.sellTax ? `这个币卖出时还会收 ${(S.sellTax * 100).toFixed(1)}% 的税。` : '')
     : `Live quotes from Binance's aggregator (${keep.vendor}). Price impact ${(keep.priceImpact * 100).toFixed(2)}%.` + (S.sellTax ? ` This coin also takes a ${(S.sellTax * 100).toFixed(1)}% tax on sells.` : '');
-  renderTrade();
+  trade.render();
 }
 
-// The trade itself: connect, check, approve if needed, dry run, then send from the user's own wallet.
-function renderTrade(message, isError) {
-  const box = $('trade'), { coin, stock } = S.d;
-  box.replaceChildren();
-  const say = (text, cls) => box.append(el('p', 'note' + (cls ? ' ' + cls : ''), text));
-  const button = (text, fn, plain) => { const b = el('button', 'btn' + (plain ? ' plain' : ''), text); b.type = 'button'; b.onclick = fn; box.append(b); };
-  if (message) say(message, isError ? 'down' : null);
-  if (!S.quotes || S.quotes.keep.error) return;
-  if (!window.ethereum) { say(t('To trade, open this page in a browser with a BNB Chain wallet such as MetaMask or Binance Wallet.', '要交易，请在装有 BNB Chain 钱包（如 MetaMask 或币安钱包）的浏览器中打开本页。')); return; }
-  if (!S.wallet) { button(t('Connect wallet', '连接钱包'), connect); return; }
-  const p = S.plan;
-  if (!p) { say(t('Wallet ', '钱包 ') + short(S.wallet)); button(t('Check this trade', '检查这笔交易'), check); return; }
-  say(zh ? `钱包 ${short(S.wallet)} 持有 ${num(p.wallet.balance)} ${coin.symbol}。` : `Wallet ${short(S.wallet)} holds ${num(p.wallet.balance)} ${coin.symbol}.`);
-  if (!p.wallet.enough) { say(t('That is less than the amount entered.', '少于你输入的数量。'), 'down'); return; }
-  if (p.wallet.needsApproval) {
-    say((zh ? `第 1 步（共 2 步）：授权币安路由合约动用恰好这个数量的 ${coin.symbol}。` : `Step 1 of 2: let Binance's router spend exactly this amount of ${coin.symbol}.`) + (p.dryRun ? (p.dryRun.ok ? t(' Dry run passed.', '模拟执行通过。') : t(' Dry run failed: ', '模拟执行失败：') + (p.dryRun.reason || p.dryRun.status)) : ''), p.dryRun && !p.dryRun.ok ? 'down' : null);
-    button(t('Approve ', '授权 ') + coin.symbol, () => send(p.approveTx, 'approval'));
-    return;
-  }
-  const out = Number(p.quote.toAmount) / 1e18;
-  if (p.dryRun?.ok) {
-    say(zh ? `已在币安 Transaction API 上模拟执行通过。你将收到约 ${num(out)} 股 ${stockName(stock)}，最多允许 ${p.slippage}% 滑点。` : `Dry run passed on Binance's Transaction API. You would receive about ${num(out)} ${stock.name} shares, with up to ${p.slippage}% slippage allowed.`, 'up');
-    button(t('Sell and keep the stock', '卖出并留下股票'), () => send(p.swapTx, 'swap'));
-  } else {
-    say(t('Dry run failed: ', '模拟执行失败：') + (p.dryRun?.reason || p.dryRun?.status || t('no result', '没有结果')) + t('. Nothing was sent.', '。没有发送任何交易。'), 'down');
-    button(t('Check again', '重新检查'), check, true);
-  }
-}
-
-async function connect() {
-  try {
-    const [account] = await ethereum.request({ method: 'eth_requestAccounts' });
-    if (await ethereum.request({ method: 'eth_chainId' }) !== '0x38')
-      await ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x38' }] });
-    S.wallet = account;
-    renderTrade();
-  } catch (e) { renderTrade(t('Could not connect: ', '连接失败：') + (e.message || e), true); }
-}
-
-async function check() {
-  renderTrade(t('Preparing the trade and running it dry.', '正在准备交易并模拟执行。'));
-  try {
-    S.plan = await postJson('/api/swap/prepare', { wallet: S.wallet, from: addr, to: S.d.stock.address, amount: S.quotes.amount, slippage: 3 + (S.sellTax || 0) * 100 });
-    renderTrade();
-  } catch (e) { S.plan = null; renderTrade(t('Could not prepare the trade: ', '无法准备交易：') + e.message, true); }
-}
-
-async function send(tx, what) {
-  try {
-    const hash = await ethereum.request({ method: 'eth_sendTransaction', params: [{ from: S.wallet, to: tx.to, data: tx.data, value: '0x' + BigInt(tx.value || '0').toString(16), gas: '0x' + Math.ceil(Number(tx.gas || 450000) * 1.3).toString(16) }] });
-    renderTrade(zh ? `${what === 'approval' ? '授权' : '兑换'}已发送，等待 BNB Chain 确认。` : `Sent the ${what}. Waiting for BNB Chain to confirm it.`);
-    for (let i = 0; i < 40; i++) {
-      await new Promise((r) => setTimeout(r, 3000));
-      const receipt = await ethereum.request({ method: 'eth_getTransactionReceipt', params: [hash] });
-      if (!receipt) continue;
-      if (receipt.status !== '0x1') { S.plan = null; return renderTrade(zh ? `${what === 'approval' ? '授权' : '兑换'}在链上失败。交易 ${short(hash)}。` : `The ${what} failed on-chain. Transaction ${short(hash)}.`, true); }
-      if (what === 'approval') return check();
-      S.plan = null;
-      const box = $('trade');
-      box.replaceChildren(el('p', 'note up', t('Done. The stock is in your wallet.', '完成。股票已到你的钱包。')));
-      const p = el('p', 'note');
-      p.append(link(t('View the transaction on BscScan', '在 BscScan 查看交易'), 'https://bscscan.com/tx/' + hash));
-      box.append(p);
-      return;
-    }
-    renderTrade(zh ? `仍在等待交易 ${short(hash)}，可在 BscScan 查看。` : `Still waiting on transaction ${short(hash)}. Check it on BscScan.`);
-  } catch (e) { renderTrade(t('Nothing was sent: ', '没有发送任何交易：') + (e.message || e), true); }
-}
+// The trade itself runs through the shared wallet flow: connect, check, approve, dry run, send.
+const trade = tradeFlow($('trade'), () => {
+  if (!S.quotes || S.quotes.keep.error) return null;
+  const { coin, stock } = S.d;
+  return {
+    from: addr, to: stock.address, amount: S.quotes.amount, slippage: 3 + (S.sellTax || 0) * 100, symbol: coin.symbol,
+    receive: (units) => { const out = Number(units) / 1e18; return zh ? `约 ${num(out)} 股 ${stockName(stock)}` : `about ${num(out)} ${stock.name} shares`; },
+    action: t('Sell and keep the stock', '卖出并留下股票'), done: t('Done. The stock is in your wallet.', '完成。股票已到你的钱包。'),
+  };
+});
 
 function renderTape() {
   const tape = $('tape'), flow = $('flow'), { coin, stock, trades } = S.d;

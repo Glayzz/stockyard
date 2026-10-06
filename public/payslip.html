@@ -46,6 +46,27 @@
     </div>
     <p class="sr" id="summary"></p>
   </div>
+
+  <section class="reinvest" id="reinvest" hidden>
+    <div class="bar">
+      <h2 class="sec" data-zh="让工资继续干活">Put this pay to work</h2>
+      <div class="nav">
+        <div class="seg" id="mode">
+          <button data-m="coin" class="on" data-zh="换回 Meme 币">Back into the coin</button>
+          <button data-m="stock" data-zh="归集到一只股票">Into one stock</button>
+        </div>
+        <div class="seg" id="part">
+          <button data-p="25" class="on">25%</button>
+          <button data-p="50">50%</button>
+          <button data-p="100">100%</button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <p class="note" id="re-note" style="margin-top:0"></p>
+      <div id="re-rows"></div>
+    </div>
+  </section>
   <p class="note" style="margin: 30px auto 0; text-align: center;" data-zh="余额和分红记录来自币安 Web3 钱包 API；钱包持有哪些币读自 BNB Chain。“分红”指某个币通过自身的分发调用打到钱包里的股票。你自己买的股票会计入余额，但不算工资。">Balances and payout history come from the Binance Web3 Wallet API; the coins a wallet holds are read from BNB Chain. A payout is stock sent to the wallet by a coin's own distribution call. Stock you bought yourself shows in the balance but is not counted as pay.</p>
 </div>
 
@@ -53,6 +74,8 @@
 <script>
 initLang();
 const P = { data: null };
+// Reinvest: swap part of each stock line into the stock meme behind it, or into the largest stock line.
+const R = { mode: 'coin', part: 25, rows: [], run: 0, open: null };
 
 const grade = (total) => { const g = total <= 0 ? ['试用期', 'On probation'] : total < 1 ? ['实习牛马', 'Intern'] : total < 10 ? ['初级牛马', 'Junior'] : total < 100 ? ['高级牛马', 'Senior'] : total < 1000 ? ['主管', 'Manager'] : ['股东', 'Shareholder']; return zh ? g[0] : g[0] + ' · ' + g[1]; };
 const day = (ms, year) => new Date(ms).toLocaleDateString(dateLocale, year ? { day: 'numeric', month: 'short', year: 'numeric' } : { day: 'numeric', month: 'short' });
@@ -194,11 +217,94 @@ async function print(wallet) {
     $('feed').classList.add('print');
     $('slot-text').textContent = data.paid ? t('PAID', '已发薪') : data.total > 0 ? t('NO PAYOUTS FOUND', '未发现分红') : t('NOTHING TO PAY', '暂无可发');
     if (!data.history) err.textContent = t('Payout history is unavailable right now, so this slip shows balances only.', '暂时拿不到分红记录，这张工资条只显示余额。');
+    renderReinvest();
   } catch (e) {
-    $('printer').hidden = true;
+    $('printer').hidden = true; $('reinvest').hidden = true;
     err.textContent = t('Could not print this payslip: ', '无法打印这张工资条：') + e.message + t('. Try again in a moment.', '。请稍后再试。');
   }
 }
+
+function reinvestRows(d) {
+  // The six largest lines. Lines worth under a dollar are not worth a network fee.
+  const lines = d.lines.filter((l) => l.value >= 1 && l.raw).slice(0, 6);
+  if (R.mode === 'coin') return lines.filter((l) => l.via.length).map((l) => ({ line: l, to: l.via[0].address, toName: l.via[0].coin, toDecimals: l.via[0].decimals ?? 18, coin: true }));
+  const top = d.lines[0];
+  return lines.filter((l) => l !== top).map((l) => ({ line: l, to: top.address, toName: stockName(top), toDecimals: 18, coin: false }));
+}
+
+async function renderReinvest() {
+  const d = P.data, box = $('re-rows'), note = $('re-note'), run = ++R.run;
+  $('reinvest').hidden = !d.lines.length;
+  if (!d.lines.length) return;
+  const rows = R.rows = reinvestRows(d);
+  R.open = null;
+  box.replaceChildren();
+  if (!rows.length) {
+    note.textContent = R.mode === 'coin'
+      ? t('This wallet holds no stock meme that trades against its stock, so there is no coin to swap back into.', '这个钱包没有持有与这些股票配对的股票 Meme，所以没有可以换回的币。')
+      : t('This wallet holds one stock worth a dollar or more, so there is nothing to gather.', '这个钱包只有一只价值 $1 以上的股票，没有需要归集的。');
+    return;
+  }
+  note.textContent = R.mode === 'coin'
+    ? t(`Swap ${R.part}% of each stock line into the stock meme you hold that trades against it. Quotes are live from Binance, and nothing moves until you sign in your own wallet.`, `把每只股票的 ${R.part}% 换成你持有的、与它配对的股票 Meme。报价来自币安实时数据，在你自己钱包里签名之前不会动用任何资产。`)
+    : t(`Swap ${R.part}% of each smaller stock line into ${rows[0].toName}, your largest. Quotes are live from Binance, and nothing moves until you sign in your own wallet.`, `把较小的每只股票的 ${R.part}% 换成你持有最多的${rows[0].toName}。报价来自币安实时数据，在你自己钱包里签名之前不会动用任何资产。`);
+
+  for (const r of rows) {
+    r.amount = (BigInt(r.line.raw) * BigInt(R.part) / 100n).toString();
+    const shares = r.line.shares * R.part / 100;
+    const row = el('div', 're-row');
+    const from = el('div');
+    from.append(el('span', 'coin', stockName(r.line)), el('span', 'addr', num(shares) + t(' shares · ', ' 股 · ') + usd(shares * r.line.price)));
+    r.out = el('div', 're-out');
+    r.out.append(el('span', 'addr', t('Getting a quote', '正在获取报价')));
+    r.go = el('button', 'btn plain', t('Reinvest', '复投'));
+    r.go.type = 'button'; r.go.disabled = true;
+    r.box = el('div', 'trade');
+    r.box.hidden = true;
+    row.append(from, el('span', 're-arrow', '→'), r.out, r.go);
+    box.append(row, r.box);
+    const amount = (units) => num(Number(units) / 10 ** r.toDecimals);
+    r.receive = (units) => r.coin ? t('about ', '约 ') + amount(units) + ' ' + r.toName : zh ? `约 ${amount(units)} 股 ${r.toName}` : `about ${amount(units)} ${r.toName} shares`;
+    r.flow = tradeFlow(r.box, () => r.quote && R.open === r ? {
+      from: r.line.address, to: r.to, amount: r.amount, slippage: 3 + (r.tax?.buy || 0) * 100, symbol: stockName(r.line), owner: d.wallet,
+      receive: r.receive, action: t('Reinvest', '复投'),
+      done: r.coin ? t('Done. The coin is in your wallet.', '完成。币已到你的钱包。') : t('Done. The stock is in your wallet.', '完成。股票已到你的钱包。'),
+    } : null);
+    r.go.onclick = () => { R.open = r; for (const x of rows) { x.box.hidden = x !== r; x.flow.render(); } };
+    if (r.coin) coinTax(r.to).then((tax) => { r.tax = tax; });
+  }
+  // One quote at a time, to stay inside Binance's rate limit.
+  for (const r of rows) {
+    let error = null;
+    try {
+      const res = await fetch(`/api/quote?from=${r.line.address}&to=${r.to}&amount=${r.amount}&wallet=${d.wallet}`);
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || res.status);
+      r.quote = j;
+    } catch (e) { error = e.message; }
+    if (run !== R.run) return;
+    if (error) r.out.replaceChildren(el('span', 'coin', t('No quote', '无报价')), el('span', 'addr', why(error)));
+    else {
+      const impact = r.quote.priceImpact;
+      r.out.replaceChildren(el('span', 'coin', r.receive(r.quote.toAmount)),
+        el('span', 'addr' + (impact > 0.05 ? ' down' : ''), t('Binance aggregator · ', '币安聚合器 · ') + r.quote.vendor + t(' · price impact ', ' · 价格影响 ') + (impact * 100).toFixed(2) + '%'));
+      r.go.disabled = false;
+    }
+    await new Promise((done) => setTimeout(done, 250));
+  }
+}
+
+const pick = (id, attr, apply) => {
+  $(id).onclick = (e) => {
+    const v = e.target.dataset[attr];
+    if (v == null) return;
+    for (const b of $(id).children) b.classList.toggle('on', b.dataset[attr] === v);
+    apply(v);
+    if (P.data) renderReinvest();
+  };
+};
+pick('mode', 'm', (v) => { R.mode = v; });
+pick('part', 'p', (v) => { R.part = Number(v); });
 
 $('form').onsubmit = (e) => { e.preventDefault(); print($('wallet').value); };
 for (const b of document.querySelectorAll('.tries button')) b.onclick = () => print(b.dataset.w);

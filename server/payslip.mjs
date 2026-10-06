@@ -16,7 +16,7 @@ const cache = new Map();
 async function stockBalances(wallet, lg) {
   const bal = await multicallAll(stocks.map((s) => [s.address, '70a08231' + addrWord(wallet)]));
   const held = {};
-  stocks.forEach((s, i) => { held[s.address] = { balance: bal[i] ? toNum(bal[i]) : 0, price: lg.stocks[s.symbol]?.price || 0 }; });
+  stocks.forEach((s, i) => { held[s.address] = { balance: bal[i] ? toNum(bal[i]) : 0, raw: bal[i] ? BigInt('0x' + bal[i].slice(0, 64)).toString() : '0', price: lg.stocks[s.symbol]?.price || 0 }; });
   return { held, source: 'BNB Chain' };
 }
 
@@ -50,17 +50,19 @@ export async function payslip(input) {
   const lg = await league();
   const { held, source } = await stockBalances(wallet, lg);
 
-  // Which stock memes this wallet holds, read on-chain for every coin with a real pool.
-  const coins = [...new Map(lg.rows.filter((r) => r.stockUsd >= 1000).map((r) => [r.address, r])).values()];
+  // Which stock memes this wallet holds, read on-chain for every coin with a real pool against a
+  // stock the wallet has. Coins paired with a stock it holds none of cannot be behind this payslip.
+  const mine = new Set(stocks.filter((s) => held[s.address].balance > 0).map((s) => s.symbol));
+  const coins = [...new Map(lg.rows.filter((r) => r.stockUsd >= 1000 && mine.has(r.sym)).map((r) => [r.address, r])).values()];
   const bal = await multicallAll(coins.map((r) => [r.address, '70a08231' + addrWord(wallet)]));
-  const employers = coins.map((r, i) => ({ coin: r.coin, address: r.address, sym: r.sym, logo: r.logo || null, bal: bal[i] ? toNum(bal[i]) : 0, value: (bal[i] ? toNum(bal[i]) : 0) * r.price }))
+  const employers = coins.map((r, i) => ({ coin: r.coin, address: r.address, sym: r.sym, decimals: r.decimals ?? 18, logo: r.logo || null, bal: bal[i] ? toNum(bal[i]) : 0, value: (bal[i] ? toNum(bal[i]) : 0) * r.price }))
     .filter((e) => e.bal > 0).sort((a, b) => b.value - a.value);
 
   const lines = stocks.map((s) => {
-    const h = held[s.address] || { balance: 0, price: 0 }, price = h.price || lg.stocks[s.symbol]?.price || 0;
+    const h = held[s.address] || { balance: 0, raw: '0', price: 0 }, price = h.price || lg.stocks[s.symbol]?.price || 0;
     return {
-      sym: s.symbol, name: s.name, nameZh: s.nameZh, address: s.address, shares: h.balance, price, value: h.balance * price,
-      via: employers.filter((e) => e.sym === s.symbol).slice(0, 3).map((e) => ({ coin: e.coin, bal: e.bal })),
+      sym: s.symbol, name: s.name, nameZh: s.nameZh, address: s.address, shares: h.balance, raw: h.raw, price, value: h.balance * price,
+      via: employers.filter((e) => e.sym === s.symbol).slice(0, 3).map((e) => ({ coin: e.coin, address: e.address, decimals: e.decimals, bal: e.bal })),
     };
   }).filter((l) => l.value >= 0.01).sort((a, b) => b.value - a.value);
 

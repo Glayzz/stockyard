@@ -5,7 +5,26 @@ import { createHmac } from 'node:crypto';
 const BASE = 'https://web3.binance.com', PREFIX = '/build';
 const OK = new Set([0, '0', '000000000']);
 
-export async function bw3(path, { method = 'GET', params, body } = {}) {
+const CONNECT = new Set(['UND_ERR_CONNECT_TIMEOUT', 'ENOTFOUND', 'EAI_AGAIN', 'ECONNREFUSED', 'ENETUNREACH', 'EHOSTUNREACH']);
+
+// When Binance cannot be reached at all, calls fail at once instead of each waiting out a timeout.
+// A quiet check every 30 seconds notices when it is back.
+let down = false;
+export const binanceUp = () => !down;
+function recheck() {
+  setTimeout(() => send('/api/v1/dex/market/rwa/platforms').then(() => { down = false; }, (e) => { if (e.offline) recheck(); else down = false; }), 30000).unref();
+}
+
+export async function bw3(path, opts) {
+  if (down) throw new Error('Binance cannot be reached from this server right now');
+  try { return await send(path, opts); }
+  catch (err) {
+    if (err.offline && !down) { down = true; recheck(); }
+    throw err;
+  }
+}
+
+async function send(path, { method = 'GET', params, body } = {}) {
   const key = process.env.BINANCE_W3_API_KEY, secret = process.env.BINANCE_W3_API_SECRET;
   if (!key || !secret) throw new Error('Set BINANCE_W3_API_KEY and BINANCE_W3_API_SECRET in .env');
   const pairs = Object.entries(params || {}).map(([k, v]) => encodeURIComponent(k) + '=' + encodeURIComponent(v));
@@ -19,6 +38,10 @@ export async function bw3(path, { method = 'GET', params, body } = {}) {
       'content-type': 'application/json', 'X-OC-APIKEY': key, 'X-OC-TIMESTAMP': timestamp,
       'X-OC-SIGN': sign, 'X-OC-RECV-WINDOW': '10000',
     },
+  }).catch((e) => {
+    // Only a failure to connect counts as Binance being unreachable; one slow answer does not.
+    const code = e.cause?.code || e.name;
+    throw Object.assign(new Error('Binance did not answer: ' + code), { offline: CONNECT.has(code) });
   });
   const text = await res.text();
   let json;

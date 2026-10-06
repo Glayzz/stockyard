@@ -13,7 +13,7 @@ const routes = {
   // Is the server up, and can it reach Binance from where it is hosted?
   'GET /api/health': async () => ({
     ok: true,
-    binance: await bw3('/api/v1/dex/market/supported/chain').then(() => 'reachable', (e) => 'unreachable: ' + (e.cause?.code || e.message)),
+    binance: await bw3('/api/v1/dex/market/supported/chain').then(() => 'reachable', (e) => 'unreachable: ' + e.message),
   }),
 
   // Every stock-paired pool that holds stock, read from the chain. Cached for two minutes.
