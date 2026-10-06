@@ -13,23 +13,23 @@ worth $100K or more. Some pay their holders in stock. Until now there was no too
 | Page | What you get |
 | --- | --- |
 | `public/index.html` · League | Every stock meme, ranked by how much real stock sits in its pool, by company. |
-| `public/coin.html` · Coin | Why a coin's price moved (meme leg vs stock leg), a sell-and-keep-the-stock estimate, live trades through the pool, US market clock. |
-| `public/payslip.html` · 牛马工资条 | Paste a wallet, print a payslip of the stock tokens it holds and the stock memes behind them. Save it as an image. |
+| `public/coin.html` · Coin | Why a coin's price moved (meme leg vs stock leg), the stock behind it (token price against the real share, 52-week range), a real Binance quote for selling into the stock or into cash, the trade itself with a dry run first, and live trades through the pool. |
+| `public/payslip.html` · 牛马工资条 | Paste a wallet, print a payslip of every payout it has received in stock tokens, with dates, and the stock memes behind them. Save it as an image. |
+| `skills/stockyard-stock-memes` | A skill in the Binance Skills Hub format that hands execution to Binance Agentic Wallet. |
+| `mcp/server.mjs` | The same data as four MCP tools for any agent. |
 
 ## Status
 
 Work in progress during the hackathon build window.
 
-- Working today: the three pages above. The league is read from the chain (see below), with
-  logos, 24h volume, 24h change and holders from the Binance Web3 API.
-- In progress: moving the data layer to the Binance Web3 API. `server/binance.mjs` is the signed
-  client, `server/routes.mjs` has the first routes (health, aggregator quote, wallet balances), and
-  `scripts/probe.mjs` exercises RWA data, market, trading quotes and wallet balances.
-- Next: real sell-and-keep-the-stock trades with simulation first, an Agentic Wallet skill, a
-  data agent on BNB Agent Studio.
+- Working: the league, coin page and payslip on live data; the server rescans PancakeSwap for new
+  pools at start and every five minutes.
+- Built, waiting on a first live trade: sell-and-keep-the-stock. The server prepares the approval
+  and swap through Binance's aggregator and dry-runs them on the Transaction API; the user's own
+  wallet signs. The server never holds a key.
+- Next: a data agent on BNB Agent Studio with b402 pay-per-call, a 中文 switch, Ondo-paired pools.
 
-Sell figures on the coin page are estimates from pool reserves, not quotes. A payslip shows what a
-wallet holds today; it does not yet separate stock a coin paid out from stock bought directly.
+Binance Web3 API modules in use: RWA Data, Market, Trading, Transaction, Wallet.
 
 ## Run it
 
@@ -64,12 +64,15 @@ Binance checks the caller's location, so run these from a region its
 3. `server/league.mjs` prices each stock from its deepest USDT pool, then reads every pool's
    balances, the coin's supply and its burned amount to get price and market cap.
 
-The scan output is too large for the repo, so run step 2 once before starting the server.
+The full scan output is too large for the repo, so `data/pools.bin` carries a packed copy of every
+pool found (45 bytes each). A fresh checkout starts from that and catches up by itself.
+`node scripts/pack-pools.mjs` refreshes it.
 
 ## Data sources
 
-Binance Web3 API (RWA data, market, trading, wallet), DexScreener (pool discovery), GeckoTerminal
-(hourly history), GoPlus (token tax and holders), public BNB Chain nodes through Multicall3.
+BNB Chain through public nodes and Multicall3 (pools, balances, supplies, prices), the Binance Web3
+API (logos, volume, holders, hourly history, trades, quotes, dry runs, wallet balances and payout
+history, stock profiles) and GoPlus (coin tax).
 
 ## Notes
 

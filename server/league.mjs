@@ -8,7 +8,7 @@ import { bw3 } from './binance.mjs';
 import { pairCount, scanRange } from './scan.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
-const SCAN = root + 'data/stock-pairs.json', NEW = root + 'data/stock-pairs-new.json';
+const SCAN = root + 'data/stock-pairs.json', NEW = root + 'data/stock-pairs-new.json', PACK = root + 'data/pools.bin';
 const USDT = '0x55d398326f99059ff775485246999027b3197955';
 const DEAD = '0x000000000000000000000000000000000000dead';
 const V2_FACTORY = '0xca143ce32fe78f1f7019d7d551a6402fc5350c73', V3_FACTORY = '0x0bfbcf9fa4f9c56b0f40a671ad40e0805a091865';
@@ -82,18 +82,34 @@ const toPool = (p) => (p.stock0 ? { pair: p.pair, index: p.index, stock: p.token
 const isMeme = (p) => !stockByAddr.has(p.coin) && !CASH.has(p.coin);
 
 function loadScan() {
-  if (!existsSync(SCAN)) throw new Error('No scan yet. Run: node scripts/scan-pairs.mjs');
-  const mtime = statSync(SCAN).mtimeMs;
+  // The full scan output if this machine has run one; otherwise the packed copy shipped in the repo.
+  const full = existsSync(SCAN), file = full ? SCAN : PACK;
+  if (!existsSync(file)) throw new Error('No pool list. Run: node scripts/scan-pairs.mjs');
+  const mtime = statSync(file).mtimeMs;
   if (mtime === S.mtime) return;
-  const scan = JSON.parse(readFileSync(SCAN, 'utf8'));
-  S.pools = scan.pairs.map(toPool).filter(isMeme);
-  S.scan = { from: scan.scannedFrom, to: scan.scannedTo, at: scan.updatedAt };
-  // Pools found by rescans since the backfill live in a small side file.
+  let scannedTo;
+  if (full) {
+    const scan = JSON.parse(readFileSync(SCAN, 'utf8'));
+    S.pools = scan.pairs.map(toPool).filter(isMeme);
+    S.scan = { from: scan.scannedFrom, to: scan.scannedTo, at: scan.updatedAt };
+    scannedTo = scan.scannedTo;
+  } else {
+    // 45 bytes per pool: pair, coin, stock number, pair index.
+    const meta = JSON.parse(readFileSync(root + 'data/pools.json', 'utf8')), buf = readFileSync(PACK);
+    S.pools = [];
+    for (let o = 0; o + 45 <= buf.length; o += 45) {
+      const p = { pair: '0x' + buf.toString('hex', o, o + 20), coin: '0x' + buf.toString('hex', o + 20, o + 40), stock: stocks[buf.readUInt8(o + 40)].address, index: buf.readUInt32BE(o + 41) };
+      if (isMeme(p)) S.pools.push(p);
+    }
+    S.scan = { from: meta.scannedFrom, to: meta.scannedTo, at: meta.updatedAt };
+    scannedTo = meta.scannedTo;
+  }
+  // Pools found by rescans since then live in a small side file.
   S.extra = [];
   if (existsSync(NEW)) {
     const extra = JSON.parse(readFileSync(NEW, 'utf8'));
-    if (extra.scannedTo > scan.scannedTo) {
-      S.extra = extra.pairs.filter((p) => p.index >= scan.scannedTo);
+    if (extra.scannedTo > scannedTo) {
+      S.extra = extra.pairs.filter((p) => p.index >= scannedTo);
       S.pools.push(...S.extra.map(toPool).filter(isMeme));
       S.scan.to = extra.scannedTo; S.scan.at = extra.updatedAt;
     }

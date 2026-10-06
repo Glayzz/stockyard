@@ -19,6 +19,22 @@ const routes = {
   // Every stock-paired pool that holds stock, read from the chain. Cached for two minutes.
   'GET /api/league': () => league(),
 
+  // The league as a short, filtered list, for agents and scripts. Defaults to coins worth $100K or more.
+  'GET /api/memes': async (q) => {
+    const lg = await league();
+    const min = q.minMcap == null ? 100000 : Number(q.minMcap), limit = Math.min(Number(q.limit) || 20, 100);
+    const want = (q.stock || '').toUpperCase();
+    const rows = lg.rows
+      .filter((r) => r.mcap >= min && r.stockUsd >= 1000 && (!want || r.ticker === want || r.sym === want))
+      .sort((a, b) => (q.sort === 'mcap' ? b.mcap - a.mcap : b.stockUsd - a.stockUsd)).slice(0, limit)
+      .map((r) => ({
+        coin: r.coin, address: r.address, pool: r.pair, stock: r.name, stockTicker: r.ticker, stockToken: r.stock,
+        sharesInPool: r.shares, stockUsdInPool: r.stockUsd, priceUsd: r.price, marketCapUsd: r.mcap,
+        volume24hUsd: r.vol24 ?? null, change24h: r.change24 ?? null, holders: r.holders ?? null,
+      }));
+    return { updatedAt: lg.updatedAt, totals: lg.stats, count: rows.length, memes: rows };
+  },
+
   // One coin's page: pool from the chain; prices, history, trades and company profile from Binance.
   'GET /api/coin': (q) => { if (!isAddr(q.a)) throw bad('a must be a coin address'); return coin(q.a); },
 
