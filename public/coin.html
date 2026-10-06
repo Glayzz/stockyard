@@ -316,7 +316,7 @@ const stamp = () => { $('updated').textContent = 'Live · ' + new Date().toLocal
 
 async function init() {
   if (!/^0x[0-9a-f]{40}$/.test(addr)) return fail('That is not a valid coin address.');
-  try { await loadPools(); } catch (err) { return fail(err.message); }
+  try { await loadLeague(); await loadPools(); } catch (err) { return fail(err.message); }
   // Show the page as soon as the pools are in; the slower sources fill in behind it.
   $('state').hidden = true; $('page').hidden = false;
   renderHead(); renderMove(); renderClock(); renderSell(); renderTape(); stamp();

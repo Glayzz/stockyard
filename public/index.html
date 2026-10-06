@@ -22,11 +22,11 @@
 
   <section class="hero">
     <div>
-      <span class="kicker">Live on BNB Chain</span>
+      <span class="kicker">Live from BNB Chain</span>
       <h1>Meme coins are sitting on</h1>
       <div class="big" id="total">$—</div>
       <h1>of real US stock.</h1>
-      <p class="sub" id="sub">Counting the stock tokens sitting in meme coin pools.</p>
+      <p class="sub" id="sub">Reading every stock-paired pool on PancakeSwap.</p>
     </div>
     <a class="teaser" href="payslip.html">
       <div class="cn">牛马工资条</div>
@@ -48,47 +48,56 @@
 
   <div class="bar">
     <h2 class="sec" id="league-title">The stock league</h2>
-    <div class="seg" id="sort">
-      <button data-k="stockUsd" class="on">Stock held</button>
-      <button data-k="mcap">Market cap</button>
-      <button data-k="vol24">24h volume</button>
+    <div class="nav">
+      <div class="seg" id="sort">
+        <button data-k="stockUsd" class="on">Stock held</button>
+        <button data-k="mcap">Market cap</button>
+      </div>
+      <div class="seg" id="scope">
+        <button data-all="0" class="on">$100K and up</button>
+        <button data-all="1">Show all</button>
+      </div>
     </div>
   </div>
   <div class="tablewrap">
     <table class="league">
-      <thead><tr><th>#</th><th>Coin</th><th>Trades against</th><th>Stock in its pool</th><th>Market cap</th><th>24h volume</th></tr></thead>
+      <thead><tr><th>#</th><th>Coin</th><th>Trades against</th><th>Stock in its pool</th><th>Market cap</th><th>Coin price</th></tr></thead>
       <tbody id="rows"><tr><td colspan="6" class="state">Loading pools</td></tr></tbody>
     </table>
   </div>
-  <p class="note">Live from DexScreener, refreshed every minute. Each stock token returns its 30 largest pools, so the totals are a floor. A coin is listed when its pool holds at least $1,000 of stock and that stock is at least 0.2% of its market cap. Pool liquidity belongs to liquidity providers; it does not back the coin's price.</p>
+  <p class="note" id="note">Loading.</p>
 </div>
 
 <script src="shared.js"></script>
 <script>
-const state = { rows: [], stock: 'ALL', sort: 'stockUsd' };
+const state = { data: null, stock: 'ALL', sort: 'stockUsd', all: false };
 
 async function load() {
-  const { rows, failed } = await loadLeague();
-  state.rows = rows;
-  $('updated').textContent = 'Live · ' + new Date().toLocaleTimeString() + (failed ? ' · ' + failed + ' stocks failed' : '');
+  state.data = await loadLeague();
+  $('updated').textContent = 'Live · ' + new Date(state.data.updatedAt).toLocaleTimeString();
   render();
 }
 
 function render() {
-  const all = state.rows;
+  const { rows, stats, scan } = state.data;
   const sum = (list, k) => list.reduce((a, m) => a + m[k], 0);
-  $('total').textContent = usd(sum(all, 'stockUsd'));
+  const big = rows.filter((m) => m.mcap >= MIN_MCAP && m.stockUsd >= MIN_STOCK_USD);
+  const shown = state.all ? rows : big;
+
+  $('total').textContent = usd(stats.stockUsd);
   $('sub').replaceChildren(
-    el('b', null, all.length + ' meme coins'), ' trade against stock tokens instead of BNB. Together they are worth ',
-    el('b', null, usd(sum(all, 'mcap'))), ' and traded ', el('b', null, usd(sum(all, 'vol24'))), ' in the last 24 hours.');
+    el('b', null, stats.poolsFound.toLocaleString('en-US') + ' pools'), ' pairing a coin with a stock token have been created on PancakeSwap. ',
+    el('b', null, stats.holdingStock.toLocaleString('en-US')), ' hold stock today, and ',
+    el('b', null, String(big.length)), ' of those coins are worth $100K or more, ', el('b', null, usd(sum(big, 'mcap'))), ' between them.');
 
   const track = $('ticker');
-  const items = all.slice().sort((a, b) => b.stockUsd - a.stockUsd).slice(0, 14)
+  const items = big.slice().sort((a, b) => b.stockUsd - a.stockUsd).slice(0, 14)
     .map((m) => { const s = el('span'); s.append(el('b', null, m.coin), ' holds ' + num(m.shares) + ' ' + m.name + ' shares'); return s; });
   track.replaceChildren(...items, ...items.map((n) => n.cloneNode(true)));
 
   const by = {};
-  for (const m of all) { const b = by[m.sym] ??= { sym: m.sym, name: m.name, n: 0, shares: 0, stockUsd: 0 }; b.n++; b.shares += m.shares; b.stockUsd += m.stockUsd; }
+  for (const m of shown) { const b = by[m.sym] ??= { sym: m.sym, name: m.name, n: 0, shares: 0, stockUsd: 0 }; b.n++; b.shares += m.shares; b.stockUsd += m.stockUsd; }
+  if (state.stock !== 'ALL' && !by[state.stock]) state.stock = 'ALL';
   const tiles = $('tiles');
   tiles.replaceChildren();
   const tile = (key, title, value, meta) => {
@@ -97,31 +106,40 @@ function render() {
     t.onclick = () => { state.stock = key; render(); };
     return t;
   };
-  tiles.append(tile('ALL', 'All stocks', usd(sum(all, 'stockUsd')), all.length + ' coins'));
+  tiles.append(tile('ALL', 'All stocks', usd(sum(shown, 'stockUsd')), shown.length + ' coins'));
   for (const b of Object.values(by).sort((x, y) => y.stockUsd - x.stockUsd))
-    tiles.append(tile(b.sym, b.name, usd(b.stockUsd), num(b.shares) + ' shares · ' + b.n + ' coins'));
+    tiles.append(tile(b.sym, b.name, usd(b.stockUsd), num(b.shares) + ' shares · ' + b.n + (b.n === 1 ? ' coin' : ' coins')));
 
-  const list = (state.stock === 'ALL' ? all : all.filter((m) => m.sym === state.stock)).slice().sort((a, b) => b[state.sort] - a[state.sort]);
+  const list = (state.stock === 'ALL' ? shown : shown.filter((m) => m.sym === state.stock)).slice().sort((a, b) => b[state.sort] - a[state.sort]);
   $('league-title').textContent = state.stock === 'ALL' ? 'The stock league' : 'The ' + STOCKS[state.stock][1] + ' league';
   const body = $('rows');
   body.replaceChildren();
-  list.slice(0, 60).forEach((m, i) => {
+  if (!list.length) {
+    const td = el('td', 'state', 'No coins match yet.');
+    td.colSpan = 6;
+    const tr = el('tr');
+    tr.append(td);
+    body.append(tr);
+  }
+  list.slice(0, 200).forEach((m, i) => {
     const tr = el('tr', m.address === NIUMA ? 'me' : '');
     const coin = el('td');
     const who = el('div', 'who');
     const names = el('div');
     names.append(el('span', 'coin', m.coin), el('span', 'addr', short(m.address)));
-    who.append(avatar(m.logo, m.coin), names);
+    who.append(avatar(null, m.coin), names);
     coin.append(who);
     const stock = el('td');
     stock.append(el('span', 'pill', m.name));
     const held = el('td', null, usd(m.stockUsd));
     held.append(el('span', 'shares', num(m.shares) + ' shares'));
-    tr.append(el('td', null, String(i + 1)), coin, stock, held, el('td', null, usd(m.mcap)), el('td', null, usd(m.vol24)));
+    tr.append(el('td', null, String(i + 1)), coin, stock, held, el('td', null, usd(m.mcap)), el('td', null, usd(m.price)));
     tr.onclick = () => { location.href = 'coin.html?a=' + m.address; };
     body.append(tr);
   });
-  renderNiuma(all);
+  $('note').textContent = `Read straight from BNB Chain: PancakeSwap v2 pairs ${scan.from.toLocaleString('en-US')} to ${scan.to.toLocaleString('en-US')} were checked against Binance's list of tokenized stocks, then balances, supplies and prices were read from the contracts. Market cap is price times supply, minus burned tokens. The default list shows coins worth $100K or more with at least $1,000 of stock in the pool`
+    + (list.length > 200 ? '; the first 200 rows are shown' : '') + '. Pool liquidity belongs to liquidity providers; it does not back the coin\'s price.';
+  renderNiuma(rows);
 }
 
 function renderNiuma(all) {
@@ -146,24 +164,28 @@ function renderNiuma(all) {
   ranks.append(
     rank(rankBy(peers, 'mcap'), me.name + ' by size'),
     rank(pos + 1, me.name + ' by stock'),
-    rank(rankBy(all, 'stockUsd'), 'of ' + all.length + ' coins'));
-  box.replaceChildren(avatar(me.logo, me.coin), left, ranks);
+    rank(rankBy(all, 'stockUsd'), 'of ' + all.length.toLocaleString('en-US') + ' coins'));
+  box.replaceChildren(avatar(null, me.coin), left, ranks);
   box.href = 'coin.html?a=' + NIUMA;
   box.hidden = false;
 }
 
-$('sort').onclick = (e) => {
-  const k = e.target.dataset.k;
-  if (!k) return;
-  state.sort = k;
-  for (const b of $('sort').children) b.classList.toggle('on', b.dataset.k === k);
-  render();
+const pick = (id, attr, apply) => {
+  $(id).onclick = (e) => {
+    const v = e.target.dataset[attr];
+    if (v == null) return;
+    for (const b of $(id).children) b.classList.toggle('on', b.dataset[attr] === v);
+    apply(v);
+    render();
+  };
 };
+pick('sort', 'k', (v) => { state.sort = v; });
+pick('scope', 'all', (v) => { state.all = v === '1'; });
 
 const refresh = () => load().catch((err) => {
   $('updated').textContent = 'Could not load live data: ' + err.message;
-  if (!state.rows.length) {
-    const td = el('td', 'state', 'Could not reach DexScreener. Retrying in a minute.');
+  if (!state.data) {
+    const td = el('td', 'state', 'The league is still being read from the chain. Retrying shortly.');
     td.colSpan = 6;
     const tr = el('tr');
     tr.append(td);

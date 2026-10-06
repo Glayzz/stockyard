@@ -1,5 +1,6 @@
 // /api routes. They run on the server so the Binance key and secret never reach the browser.
 import { bw3 } from './binance.mjs';
+import { league } from './league.mjs';
 
 const CHAIN = '56';
 const isAddr = (a) => /^0x[0-9a-fA-F]{40}$/.test(a || '');
@@ -11,6 +12,9 @@ const routes = {
     ok: true,
     binance: await bw3('/api/v1/dex/market/supported/chain').then(() => 'reachable', (e) => 'unreachable: ' + (e.cause?.code || e.message)),
   }),
+
+  // Every stock-paired pool that holds stock, read from the chain. Cached for two minutes.
+  'GET /api/league': () => league(),
 
   // A real quote from Binance's aggregator, e.g. a stock meme into the stock it trades against.
   // amount is in the token's smallest unit.

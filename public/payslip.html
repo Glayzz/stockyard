@@ -56,7 +56,9 @@ const grade = (total) => total <= 0 ? '试用期 · On probation' : total < 1 ? 
 
 async function lookup(wallet) {
   P.league ??= await loadLeague();
-  const { rows, prices } = P.league;
+  const { prices } = P.league;
+  // Only coins with a real pool are checked, to keep the lookup to a few on-chain calls.
+  const rows = P.league.rows.filter((r) => r.stockUsd >= MIN_STOCK_USD);
   const memes = [...new Set(rows.map((r) => r.address))];
   const bal = await balances(wallet, [...Object.values(STOCKS).map((s) => s[0]), ...memes]);
   const held = rows.filter((r) => bal[r.address] > 0).map((r) => ({ ...r, bal: bal[r.address], value: bal[r.address] * r.price }));

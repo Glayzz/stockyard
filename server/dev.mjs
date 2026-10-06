@@ -39,3 +39,8 @@ const server = createServer(async (req, res) => {
 
 const port = Number(process.argv[2] || process.env.PORT || 4173);
 server.listen(port, () => console.log(`Stockyard on http://localhost:${port}`));
+
+// Build the league once at start and keep it warm, so page loads never wait on the chain.
+const warm = () => handle('GET', '/api/league', {}).then((r) => r.status !== 200 && console.log('league:', r.json.error));
+warm();
+setInterval(warm, 120000);
