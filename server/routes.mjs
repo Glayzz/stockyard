@@ -1,6 +1,9 @@
 // /api routes. They run on the server so the Binance key and secret never reach the browser.
 import { bw3 } from './binance.mjs';
 import { league } from './league.mjs';
+import { payslip } from './payslip.mjs';
+import { coin } from './coin.mjs';
+import { prepare, status } from './swap.mjs';
 
 const CHAIN = '56';
 const isAddr = (a) => /^0x[0-9a-fA-F]{40}$/.test(a || '');
@@ -15,6 +18,24 @@ const routes = {
 
   // Every stock-paired pool that holds stock, read from the chain. Cached for two minutes.
   'GET /api/league': () => league(),
+
+  // One coin's page: pool from the chain; prices, history, trades and company profile from Binance.
+  'GET /api/coin': (q) => { if (!isAddr(q.a)) throw bad('a must be a coin address'); return coin(q.a); },
+
+  // A wallet's stock tokens, the stock memes behind them and the payouts it has received.
+  'GET /api/payslip': (q) => { if (!isAddr(q.w)) throw bad('w must be a wallet address'); return payslip(q.w); },
+
+  // Builds the approval and swap for the user's own wallet to sign, with a dry run. Moves nothing.
+  'POST /api/swap/prepare': (_q, body) => {
+    if (!isAddr(body?.wallet) || !isAddr(body?.from) || !isAddr(body?.to)) throw bad('wallet, from and to must be addresses');
+    if (!/^[1-9]\d{0,40}$/.test(body.amount || '')) throw bad('amount must be a whole number in the smallest unit');
+    const slippage = Number(body.slippage ?? 3);
+    if (!(slippage > 0 && slippage <= 20)) throw bad('slippage must be between 0 and 20 percent');
+    return prepare({ wallet: body.wallet, from: body.from, to: body.to, amount: body.amount, slippage });
+  },
+
+  // Where a sent swap has got to.
+  'GET /api/swap/status': (q) => { if (!/^0x[0-9a-fA-F]{64}$/.test(q.hash || '')) throw bad('hash must be a transaction hash'); return status(q.hash); },
 
   // A real quote from Binance's aggregator, e.g. a stock meme into the stock it trades against.
   // amount is in the token's smallest unit.

@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { extname, join, normalize, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { handle } from './routes.mjs';
+import { rescan } from './league.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const pub = join(root, 'public');
@@ -44,3 +45,8 @@ server.listen(port, () => console.log(`Stockyard on http://localhost:${port}`));
 const warm = () => handle('GET', '/api/league', {}).then((r) => r.status !== 200 && console.log('league:', r.json.error));
 warm();
 setInterval(warm, 120000);
+
+// At start and every five minutes, pick up the pools created since the last look.
+const look = () => rescan().then((n) => n && console.log('rescan: ' + n + ' new stock pools'), (e) => console.log('rescan:', e.message));
+look();
+setInterval(look, 300000);

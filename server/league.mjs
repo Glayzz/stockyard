@@ -1,18 +1,21 @@
 // Builds the league from the chain: every pool the scan found that pairs a coin with a tokenized
 // stock, with balances, prices and market caps read on-chain through Multicall3. Binance's Market
 // API then adds 24h volume, 24h change, holders and logos for the coins that make the default list.
-import { readFileSync, existsSync, statSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { multicallAll, addrWord, word, toAddr, toNum, toText } from './chain.mjs';
 import { bw3 } from './binance.mjs';
+import { pairCount, scanRange } from './scan.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
-const SCAN = root + 'data/stock-pairs.json';
+const SCAN = root + 'data/stock-pairs.json', NEW = root + 'data/stock-pairs-new.json';
 const USDT = '0x55d398326f99059ff775485246999027b3197955';
 const DEAD = '0x000000000000000000000000000000000000dead';
 const V2_FACTORY = '0xca143ce32fe78f1f7019d7d551a6402fc5350c73', V3_FACTORY = '0x0bfbcf9fa4f9c56b0f40a671ad40e0805a091865';
 const V3_FEES = [100, 500, 2500, 10000];
 const MIN_MCAP = 100000, MIN_STOCK_USD = 1000, FULL_PASS_MS = 20 * 60000;
+// Pools this recent are checked on every refresh, since a new coin can gain liquidity at any moment.
+const WATCH_LAST = 8000;
 // Tokens that are money, not memes: a stock/USDT pool is not a stock meme.
 const CASH = new Set([
   USDT, '0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c', '0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d', '0xe9e7cea3dedca5984780bafc599bd69add087d56',
@@ -74,18 +77,45 @@ export async function stockPrices() {
 }
 
 // What stays in memory between builds.
-const S = { mtime: 0, scan: null, pools: [], live: null, fullAt: 0, coins: new Map(), market: new Map(), logos: new Map() };
+const S = { mtime: 0, scan: null, pools: [], extra: [], live: null, fullAt: 0, coins: new Map(), market: new Map(), logos: new Map() };
+const toPool = (p) => (p.stock0 ? { pair: p.pair, index: p.index, stock: p.token0, coin: p.token1 } : { pair: p.pair, index: p.index, stock: p.token1, coin: p.token0 });
+const isMeme = (p) => !stockByAddr.has(p.coin) && !CASH.has(p.coin);
 
 function loadScan() {
   if (!existsSync(SCAN)) throw new Error('No scan yet. Run: node scripts/scan-pairs.mjs');
   const mtime = statSync(SCAN).mtimeMs;
   if (mtime === S.mtime) return;
   const scan = JSON.parse(readFileSync(SCAN, 'utf8'));
-  S.pools = scan.pairs
-    .map((p) => (p.stock0 ? { pair: p.pair, index: p.index, stock: p.token0, coin: p.token1 } : { pair: p.pair, index: p.index, stock: p.token1, coin: p.token0 }))
-    .filter((p) => !stockByAddr.has(p.coin) && !CASH.has(p.coin));
+  S.pools = scan.pairs.map(toPool).filter(isMeme);
   S.scan = { from: scan.scannedFrom, to: scan.scannedTo, at: scan.updatedAt };
+  // Pools found by rescans since the backfill live in a small side file.
+  S.extra = [];
+  if (existsSync(NEW)) {
+    const extra = JSON.parse(readFileSync(NEW, 'utf8'));
+    if (extra.scannedTo > scan.scannedTo) {
+      S.extra = extra.pairs.filter((p) => p.index >= scan.scannedTo);
+      S.pools.push(...S.extra.map(toPool).filter(isMeme));
+      S.scan.to = extra.scannedTo; S.scan.at = extra.updatedAt;
+    }
+  }
   S.mtime = mtime; S.live = null;
+}
+
+// Checks the pairs created since the last look and adds any that contain a stock token.
+let rescanning = null;
+export function rescan() {
+  rescanning ??= (async () => {
+    loadScan();
+    const total = await pairCount();
+    if (total <= S.scan.to) return 0;
+    const found = await scanRange(S.scan.to, total, new Map(stocks.map((s) => [s.address, s.symbol])), { parallel: 3 });
+    S.extra.push(...found);
+    S.pools.push(...found.map(toPool).filter(isMeme));
+    S.scan.to = total; S.scan.at = new Date().toISOString();
+    writeFileSync(NEW, JSON.stringify({ scannedTo: total, updatedAt: S.scan.at, pairs: S.extra }));
+    return found.length;
+  })().finally(() => { rescanning = null; });
+  return rescanning;
 }
 
 // The slow pass: which of the 200,000-odd pools hold any stock at all. Runs every 20 minutes.
@@ -121,25 +151,29 @@ async function build() {
   const prices = await stockPrices();
   if (!S.live || Date.now() - S.fullAt > FULL_PASS_MS) await fullPass(prices);
 
+  // Pools that hold stock, plus the newest pools, which may have gained liquidity since the slow pass.
+  const seen = new Set(S.live.map((p) => p.pair));
+  const targets = S.live.concat(S.pools.filter((p) => p.index >= S.scan.to - WATCH_LAST && !seen.has(p.pair)));
+
   // Symbol, name and decimals are read once per coin.
-  const fresh = S.live.filter((p) => !S.coins.has(p.coin));
+  const fresh = targets.filter((p) => !S.coins.has(p.coin));
   const meta = await multicallAll(fresh.flatMap((p) => [[p.coin, '313ce567'], [p.coin, '95d89b41'], [p.coin, '06fdde03']]));
   fresh.forEach((p, i) => S.coins.set(p.coin, {
     decimals: meta[3 * i] ? parseInt(meta[3 * i].slice(0, 64), 16) : 18, symbol: toText(meta[3 * i + 1]) || '?', name: toText(meta[3 * i + 2]),
   }));
 
-  const bal = await multicallAll(S.live.flatMap((p) => [
+  const bal = await multicallAll(targets.flatMap((p) => [
     [p.stock, '70a08231' + addrWord(p.pair)], [p.coin, '70a08231' + addrWord(p.pair)], [p.coin, '18160ddd'], [p.coin, '70a08231' + addrWord(DEAD)],
   ]));
   const rows = [];
-  S.live.forEach((p, i) => {
+  targets.forEach((p, i) => {
     const s = stockByAddr.get(p.stock), c = S.coins.get(p.coin), [inStock, inCoin, supply, burned] = bal.slice(4 * i, 4 * i + 4);
     const shares = inStock ? toNum(inStock) : 0, stockUsd = shares * (prices[s.symbol]?.price || 0);
     const coinInPool = inCoin ? toNum(inCoin, c.decimals) : 0;
     if (stockUsd < 50 || !coinInPool) return;
     const price = stockUsd / coinInPool, total = supply ? toNum(supply, c.decimals) : 0, dead = burned ? toNum(burned, c.decimals) : 0;
     rows.push({
-      coin: c.symbol, coinName: c.name, address: p.coin, pair: p.pair, index: p.index,
+      coin: c.symbol, coinName: c.name, decimals: c.decimals, address: p.coin, pair: p.pair, index: p.index,
       sym: s.symbol, name: s.name, ticker: s.ticker, stock: p.stock,
       shares, stockUsd, coinInPool, price, mcap: price * Math.max(0, total - dead),
     });
@@ -149,7 +183,7 @@ async function build() {
 
   return {
     updatedAt: new Date().toISOString(),
-    scan: S.scan,
+    scan: { ...S.scan },
     stats: {
       poolsFound: S.pools.length, holdingStock: rows.length, over100k: rows.filter((r) => r.mcap >= MIN_MCAP && r.stockUsd >= MIN_STOCK_USD).length,
       stockUsd: rows.reduce((a, r) => a + r.stockUsd, 0),

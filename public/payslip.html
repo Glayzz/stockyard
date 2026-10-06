@@ -23,7 +23,7 @@
     <span class="kicker">Stock memes pay their holders</span>
     <h1><span>牛马工资条</span></h1>
     <h2>Your memes are paying you in stock.</h2>
-    <p>Paste a wallet and print its payslip: every stock token it holds, and the stock memes behind it.</p>
+    <p>Paste a wallet and print its payslip: every payout it has received in stock tokens, and the stock memes behind them.</p>
     <form class="lookup" id="form">
       <input id="wallet" placeholder="0x… wallet address" autocomplete="off" spellcheck="false" aria-label="Wallet address">
       <button class="btn" type="submit">Print payslip</button>
@@ -37,7 +37,7 @@
 
   <div class="printer" id="printer" hidden>
     <div class="slot"><span class="dot"></span><span id="slot-text">READY</span></div>
-    <div class="feed" id="feed"><canvas id="slip" width="1080" height="1128" role="img"></canvas></div>
+    <div class="feed" id="feed"><canvas id="slip" width="1094" height="1142" role="img"></canvas></div>
     <div class="actions">
       <button class="btn" id="save" type="button">Save image</button>
       <button class="btn plain" id="share" type="button">Share on X</button>
@@ -45,38 +45,31 @@
     </div>
     <p class="sr" id="summary"></p>
   </div>
-  <p class="note" style="margin: 30px auto 0; text-align: center;">The payslip shows the stock tokens in a wallet today and the stock memes it holds. Some coins, like NIUMA, pay holders in stock; stock you bought yourself is counted too. Balances come straight from BNB Chain, prices from DexScreener.</p>
+  <p class="note" style="margin: 30px auto 0; text-align: center;">Balances and payout history come from the Binance Web3 Wallet API; the coins a wallet holds are read from BNB Chain. A payout is stock sent to the wallet by a coin's own distribution call. Stock you bought yourself shows in the balance but is not counted as pay.</p>
 </div>
 
 <script src="shared.js"></script>
 <script>
-const P = { league: null, data: null };
+const P = { data: null };
 
 const grade = (total) => total <= 0 ? '试用期 · On probation' : total < 1 ? '实习牛马 · Intern' : total < 10 ? '初级牛马 · Junior' : total < 100 ? '高级牛马 · Senior' : total < 1000 ? '主管 · Manager' : '股东 · Shareholder';
+const day = (ms, year) => new Date(ms).toLocaleDateString('en-GB', year ? { day: 'numeric', month: 'short', year: 'numeric' } : { day: 'numeric', month: 'short' });
 
 async function lookup(wallet) {
-  P.league ??= await loadLeague();
-  const { prices } = P.league;
-  // Only coins with a real pool are checked, to keep the lookup to a few on-chain calls.
-  const rows = P.league.rows.filter((r) => r.stockUsd >= MIN_STOCK_USD);
-  const memes = [...new Set(rows.map((r) => r.address))];
-  const bal = await balances(wallet, [...Object.values(STOCKS).map((s) => s[0]), ...memes]);
-  const held = rows.filter((r) => bal[r.address] > 0).map((r) => ({ ...r, bal: bal[r.address], value: bal[r.address] * r.price }));
-  const lines = Object.entries(STOCKS).map(([sym, [a, name]]) => ({
-    sym, name, shares: bal[a] || 0, value: (bal[a] || 0) * (prices[sym] || 0),
-    via: held.filter((h) => h.sym === sym).sort((x, y) => y.value - x.value),
-  })).filter((l) => l.value >= 0.01).sort((a, b) => b.value - a.value);
-  const employers = [...new Map(held.sort((x, y) => y.value - x.value).map((h) => [h.address, h])).values()];
-  return { wallet, lines, employers, total: lines.reduce((a, l) => a + l.value, 0) };
+  const r = await fetch('/api/payslip?w=' + wallet);
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error || r.status);
+  return j;
 }
 
 function drawSlip(d) {
   const W = 1080, rowH = 128, shown = d.lines.slice(0, 6), n = Math.max(shown.length, 1);
-  const H = 1000 + n * rowH;
+  const recent = d.recent.slice(0, 4);
+  const H = 1000 + n * rowH + (recent.length ? 76 + recent.length * 48 : 0) + (d.paid ? 46 : 0);
   const c = $('slip'), SHADOW = 14;
   c.width = W + SHADOW; c.height = H + SHADOW;
   const g = c.getContext('2d');
-  const INK = '#121212', PAPER = '#fffdf6', YEL = '#ffd400', RED = '#df3a2c', MUT = '#6a6455';
+  const INK = '#121212', PAPER = '#fffdf6', YEL = '#ffd400', RED = '#df3a2c', MUT = '#6a6455', GREEN = '#0a8a55';
   const mono = (w, s) => `${w} ${s}px "JetBrains Mono", "Noto Sans SC", monospace`;
   const body = (w, s) => `${w} ${s}px "Space Grotesk", "Noto Sans SC", sans-serif`;
   const disp = (s) => `400 ${s}px "Archivo Black", "Noto Sans SC", sans-serif`;
@@ -107,9 +100,9 @@ function drawSlip(d) {
   const names = d.employers.map((e) => e.coin);
   const meta = [
     ['EMPLOYEE', d.wallet.slice(0, 10) + '…' + d.wallet.slice(-8)],
-    ['PAY DATE', new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })],
-    ['EMPLOYERS', names.length ? names.slice(0, 3).join(', ') + (names.length > 3 ? ' +' + (names.length - 3) : '') : 'none yet'],
-    ['GRADE', grade(d.total)],
+    ['PAY PERIOD', d.paid ? day(d.paid.since, true) + ' to ' + day(Date.now(), true) : day(Date.now(), true)],
+    ['EMPLOYERS', names.length ? names.slice(0, 3).join(', ') + (d.employerCount > 3 ? ' +' + (d.employerCount - 3) : '') : 'none yet'],
+    ['GRADE', grade(d.paid ? d.paid.usd : d.total)],
   ];
   for (const [k, v] of meta) {
     text(k, 56, y, mono(500, 26), MUT);
@@ -125,30 +118,46 @@ function drawSlip(d) {
   if (!shown.length) {
     text('No stock in this wallet yet', 56, y + 58, body(700, 42));
     text('Hold a stock meme like 牛马 NIUMA to get paid in stock', 56, y + 100, mono(500, 24), MUT);
+    y += rowH;
   }
   for (const l of shown) {
-    const via = l.via.length ? 'via ' + l.via.slice(0, 2).map((v) => v.coin + ' · you hold ' + num(v.bal)).join(', ') : 'held directly';
+    const coin = l.via.length ? 'via ' + l.via.map((v) => v.coin).join(', ') : null;
+    const paid = l.paid ? `${l.paid.count}${l.paid.more ? '+' : ''} payouts since ${day(l.paid.first)}` : null;
     text(l.name, 56, y + 56, body(700, 46));
-    text(fit(via, mono(500, 24), 540), 56, y + 98, mono(500, 24), MUT);
+    text(fit([paid, coin].filter(Boolean).join(' · ') || 'held directly, no payouts found', mono(500, 24), 540), 56, y + 98, mono(500, 24), paid ? GREEN : MUT);
     text(num(l.shares), 740, y + 62, mono(700, 36), INK, 'right');
     text(usd(l.value), W - 56, y + 62, mono(700, 36), INK, 'right');
     y += rowH;
   }
-  if (!shown.length) y += rowH;
+  if (recent.length) {
+    dash(y + 10);
+    y += 58;
+    text('LATEST PAYOUTS', 56, y, mono(500, 24), MUT);
+    for (const p of recent) {
+      y += 48;
+      text(day(p.time), 56, y, mono(700, 28));
+      text(fit(p.name, mono(500, 28), 330), 220, y, mono(500, 28));
+      text('+' + num(p.shares), 740, y, mono(700, 28), GREEN, 'right');
+      text(usd(p.value), W - 56, y, mono(500, 28), INK, 'right');
+    }
+    y += 18;
+  }
   dash(y + 10);
   y += 70;
-  text(d.lines.length > shown.length ? `TOTAL PAID IN STOCK · ${d.lines.length} STOCKS` : 'TOTAL PAID IN STOCK', 56, y, mono(700, 26), MUT);
+  text(d.paid ? (d.paid.atLeast ? 'PAID TO DATE · AT LEAST' : 'PAID TO DATE') + ` · ${d.paid.count} PAYOUTS` : 'STOCK IN THIS WALLET', 56, y, mono(700, 26), MUT);
   y += 100;
-  text(usd(d.total), 56, y, disp(104));
+  text(usd(d.paid ? d.paid.usd : d.total), 56, y, disp(104));
+  const sealY = y - 40;
+  if (d.paid) { y += 46; text(`holding ${usd(d.total)} of stock today` + (d.lines.length > shown.length ? ` in ${d.lines.length} stocks` : ''), 56, y, mono(500, 24), MUT); }
 
   // red company seal
   g.save();
-  g.translate(W - 200, y - 40); g.rotate(-0.24); g.globalAlpha = .9;
+  g.translate(W - 200, sealY); g.rotate(-0.24); g.globalAlpha = .9;
   g.strokeStyle = RED; g.fillStyle = RED; g.textAlign = 'center';
   g.lineWidth = 9; g.beginPath(); g.arc(0, 0, 128, 0, Math.PI * 2); g.stroke();
   g.lineWidth = 3; g.beginPath(); g.arc(0, 0, 110, 0, Math.PI * 2); g.stroke();
-  g.font = '900 68px "Noto Sans SC", sans-serif'; g.fillText(d.total > 0 ? '已发薪' : '待发薪', 0, 22);
-  g.font = mono(700, 19); g.fillText(d.total > 0 ? 'PAID IN STOCK' : 'NOT PAID YET', 0, -56); g.fillText('STOCKYARD', 0, 72);
+  g.font = '900 68px "Noto Sans SC", sans-serif'; g.fillText(d.paid ? '已发薪' : '待发薪', 0, 22);
+  g.font = mono(700, 19); g.fillText(d.paid ? 'PAID IN STOCK' : 'NOT PAID YET', 0, -56); g.fillText('STOCKYARD', 0, 72);
   g.restore();
 
   // barcode from the wallet address
@@ -156,11 +165,11 @@ function drawSlip(d) {
   const by = y + 70;
   g.fillStyle = INK;
   [...d.wallet.slice(2)].forEach((ch, i) => { const w = 3 + (parseInt(ch, 16) % 4) * 2; if (i % 2 === 0) g.fillRect(bx, by, w, 70); bx += w + 3; });
-  text('stockyard · stock tokens in this wallet today', 56, by + 110, mono(500, 22), MUT);
+  text('stockyard · payouts from the Binance Web3 Wallet API', 56, by + 110, mono(500, 22), MUT);
 
   c.setAttribute('aria-label', 'Payslip for wallet ' + short(d.wallet));
   $('summary').textContent = `Payslip for ${d.wallet}. ` + (d.lines.length
-    ? d.lines.map((l) => `${num(l.shares)} ${l.name} shares worth ${usd(l.value)}`).join('; ') + `. Total ${usd(d.total)}.`
+    ? d.lines.map((l) => `${num(l.shares)} ${l.name} shares worth ${usd(l.value)}` + (l.paid ? `, ${l.paid.count} payouts` : '')).join('; ') + `. Holding ${usd(d.total)}.` + (d.paid ? ` Paid to date ${usd(d.paid.usd)} in ${d.paid.count} payouts.` : '')
     : 'No stock tokens in this wallet yet.');
 }
 
@@ -181,7 +190,8 @@ async function print(wallet) {
     history.replaceState(null, '', '?w=' + wallet);
     void $('feed').offsetWidth;
     $('feed').classList.add('print');
-    $('slot-text').textContent = data.total > 0 ? 'PAID' : 'NOTHING TO PAY';
+    $('slot-text').textContent = data.paid ? 'PAID' : data.total > 0 ? 'NO PAYOUTS FOUND' : 'NOTHING TO PAY';
+    if (!data.history) err.textContent = 'Payout history is unavailable right now, so this slip shows balances only.';
   } catch (e) {
     $('printer').hidden = true;
     err.textContent = 'Could not print this payslip: ' + e.message + '. Try again in a moment.';
@@ -198,8 +208,9 @@ $('save').onclick = () => $('slip').toBlob((blob) => {
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 });
 $('share').onclick = () => {
-  const d = P.data, n = d.lines.length;
-  const text = n ? `My memes paid me in stock: ${usd(d.total)} across ${n} stock${n > 1 ? 's' : ''}. 牛马工资条` : 'Waiting on my first stock payslip. 牛马工资条';
+  const d = P.data;
+  const text = d.paid ? `My memes have paid me ${usd(d.paid.usd)} in real stock across ${d.paid.count} payouts. 牛马工资条`
+    : d.lines.length ? `My wallet holds ${usd(d.total)} of tokenized stock. 牛马工资条` : 'Waiting on my first stock payslip. 牛马工资条';
   window.open('https://x.com/intent/post?text=' + encodeURIComponent(text) + '&url=' + encodeURIComponent(location.href), '_blank', 'noopener');
 };
 $('copy').onclick = async () => {

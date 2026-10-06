@@ -9,3 +9,12 @@
 - 2026-10-06 Market: token/top-liquidity returns 15 pools for SPYB. PancakeSwap v2 has far more pools quoted in SPYB than that, so finding every stock-paired pool needed an on-chain scan of the factory's pair list. liquidityUsd and tokenAmount are null for some pools.
 - 2026-10-06 RWA: rwa/tokens with platformId=bstock returned 46 items while rwa/platforms reports 87 bStock tickers on BSC; not yet clear whether that is paging or a filter.
 - 2026-10-06T18:20:41.468Z call OK /api/v1/dex/market/rwa/platforms in 1098 ms
+- 2026-10-06 Transaction: pre-transaction/simulate with the wrong body answers "evmParams is required for EVM chains", but the field in the schema is evmTx. The error names a field that does not exist.
+- 2026-10-06 Docs: the per-endpoint parameters are only in the downloadable schema.json linked from the API reference page ("Download schema"), not in llms-full.txt. Finding that link is what unblocked swap, simulate and history.
+- 2026-10-06 Transaction: broadcast-transaction needs a signed raw transaction. Browser wallets sign and send in one step, so a web app cannot use Binance's broadcast or its MEV protection for user trades.
+- 2026-10-06 Trading: for 1,000 NIUMA the aggregator routed NIUMA > WBNB > BTCB > USDT > SPYB (four hops) although a direct NIUMA/SPYB pool exists; at 100,000 NIUMA it used the direct pool.
+- 2026-10-06 Trading: quote reports taxRate "0" for NIUMA, while GoPlus reports a 1% buy and sell tax on the same token.
+- 2026-10-06 Market: token/basic-info is a POST that takes its parameters in the query string; sending them in the body returns "Parameter binanceChainId is required".
+- 2026-10-06 RWA: the keyed rwa/tokens list has 46 bStocks on BSC. Binance's public bapi list has 87, including BNCB, GMEB, DJTB and NFLXB, which have thousands of pools each. rwa/price and the underlying-* endpoints do not cover those.
+- 2026-10-06 Wallet: transactions-by-address returns methodId, which made it possible to tell holder payouts (0x84da2c7b) from ordinary transfers. limit=100 works; the cursor pages further back.
+- 2026-10-06 Wallet: token-balances-by-address accepts 20 tokens per call, so checking all 92 stock tokens for one wallet takes five calls.
