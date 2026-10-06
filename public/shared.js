@@ -10,6 +10,27 @@ const MULTICALL = '0xca11bde05977b3631167028862be2a173976ca11';
 // The default league only lists coins at or above these; the Show all switch lifts them.
 const MIN_MCAP = 100000, MIN_STOCK_USD = 1000;
 
+// Language: English or 中文. Remembered in this browser; a Chinese browser starts in 中文.
+let LANG = 'en';
+try { LANG = localStorage.getItem('stockyard-lang') || ((navigator.language || '').toLowerCase().startsWith('zh') ? 'zh' : 'en'); } catch {}
+const zh = LANG === 'zh';
+const t = (en, cn) => (zh ? cn : en);
+// A stock or league row carries both names; pick the one for this language.
+const stockName = (x) => (zh && x.nameZh) || x.name;
+const dateLocale = zh ? 'zh-CN' : 'en-GB';
+function initLang() {
+  document.documentElement.lang = zh ? 'zh-CN' : 'en';
+  if (zh) {
+    for (const n of document.querySelectorAll('[data-zh]')) n.textContent = n.dataset.zh;
+    for (const n of document.querySelectorAll('[data-zh-placeholder]')) n.placeholder = n.dataset.zhPlaceholder;
+  }
+  const b = document.getElementById('lang');
+  if (!b) return;
+  b.textContent = zh ? 'EN' : '中文';
+  b.setAttribute('aria-label', zh ? 'Switch to English' : '切换到中文');
+  b.onclick = () => { try { localStorage.setItem('stockyard-lang', zh ? 'en' : 'zh'); } catch {} location.reload(); };
+}
+
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
 const usd = (n) => n >= 1e6 ? '$' + (n / 1e6).toFixed(2) + 'M' : n >= 1e3 ? '$' + (n / 1e3).toFixed(1) + 'K' : n >= 1 ? '$' + n.toFixed(2) : n > 0 ? '$' + n.toPrecision(3) : '$0';

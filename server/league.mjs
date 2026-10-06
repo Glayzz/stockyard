@@ -9,6 +9,8 @@ import { pairCount, scanRange } from './scan.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const SCAN = root + 'data/stock-pairs.json', NEW = root + 'data/stock-pairs-new.json', PACK = root + 'data/pools.bin';
+// LIVE lists the pools last seen holding stock, so a restart can skip straight to them. SNAP is the last league built.
+const LIVE = root + 'data/live.json', SNAP = root + 'data/league-cache.json';
 const USDT = '0x55d398326f99059ff775485246999027b3197955';
 const DEAD = '0x000000000000000000000000000000000000dead';
 const V2_FACTORY = '0xca143ce32fe78f1f7019d7d551a6402fc5350c73', V3_FACTORY = '0x0bfbcf9fa4f9c56b0f40a671ad40e0805a091865';
@@ -188,9 +190,19 @@ export function rescan() {
 
 // The slow pass: which of the 200,000-odd pools hold any stock at all. Runs every 20 minutes.
 async function fullPass(prices) {
-  const held = await multicallAll(S.pools.map((p) => [p.stock, '70a08231' + addrWord(p.pair)]));
-  S.live = S.pools.filter((p, i) => (held[i] ? toNum(held[i]) : 0) * (prices[stockByAddr.get(p.stock).symbol]?.price || 0) >= 50);
+  const pools = S.pools.slice();
+  const held = await multicallAll(pools.map((p) => [p.stock, '70a08231' + addrWord(p.pair)]));
+  S.live = pools.filter((p, i) => (held[i] ? toNum(held[i]) : 0) * (prices[stockByAddr.get(p.stock).symbol]?.price || 0) >= 50);
   S.fullAt = Date.now();
+  try { writeFileSync(LIVE, JSON.stringify({ updatedAt: new Date().toISOString(), pairs: S.live.map((p) => p.pair) })); } catch {}
+}
+
+// The slow pass runs in the background once there is a list to work from; only a first start with
+// no saved list has to wait for it.
+let passing = null;
+function refreshLive(prices) {
+  if (passing || Date.now() - S.fullAt <= FULL_PASS_MS) return;
+  passing = fullPass(prices).catch((e) => console.log('slow pass failed:', e.message)).finally(() => { passing = null; });
 }
 
 // Binance Market API extras for the coins on the default list. Left as they were if Binance is unreachable.
@@ -217,7 +229,12 @@ async function enrich(rows) {
 async function build() {
   loadScan();
   const prices = await stockPrices();
-  if (!S.live || Date.now() - S.fullAt > FULL_PASS_MS) await fullPass(prices);
+  if (!S.live && existsSync(LIVE)) {
+    const known = new Set(JSON.parse(readFileSync(LIVE, 'utf8')).pairs);
+    S.live = S.pools.filter((p) => known.has(p.pair));
+  }
+  if (!S.live) await fullPass(prices);
+  else refreshLive(prices);
 
   // Pools that hold stock, plus the newest pools, which may have gained liquidity since the slow pass.
   const seen = new Set(S.live.map((p) => p.pair));
@@ -264,8 +281,14 @@ async function build() {
 let cache = null, building = null;
 
 // The league is rebuilt at most once every `maxAgeMs`; callers in between get the cached copy.
+// After a restart the last league saved to disk is served at once while a fresh one is built.
 export async function league(maxAgeMs = 120000) {
+  if (!cache && existsSync(SNAP)) { try { cache = JSON.parse(readFileSync(SNAP, 'utf8')); } catch {} }
   if (cache && Date.now() - Date.parse(cache.updatedAt) < maxAgeMs) return cache;
-  building ??= build().then((v) => { cache = v; return v; }).finally(() => { building = null; });
+  if (!building) {
+    building = build().then((v) => { cache = v; try { writeFileSync(SNAP, JSON.stringify(v)); } catch {} return v; }).finally(() => { building = null; });
+    // Logged here so a failed refresh never becomes an unhandled rejection; the last good copy keeps being served.
+    building.catch((e) => console.log('league build failed:', e.message));
+  }
   return cache || building;
 }

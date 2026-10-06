@@ -14,27 +14,28 @@
   <div class="top">
     <a class="brand" href="index.html">STOCKYARD <small>牛马</small></a>
     <nav class="nav">
-      <span class="live"><span class="dot"></span><span id="updated">Loading live data</span></span>
-      <a class="on" href="index.html">League</a>
-      <a class="cta" href="payslip.html">工资条 Payslip</a>
+      <span class="live"><span class="dot"></span><span id="updated" data-zh="正在加载实时数据">Loading live data</span></span>
+      <a class="on" href="index.html" data-zh="排行榜">League</a>
+      <a class="cta" href="payslip.html" data-zh="工资条">工资条 Payslip</a>
+      <button class="lang" id="lang" type="button">中文</button>
     </nav>
   </div>
 
   <section class="hero">
     <div>
-      <span class="kicker">Live from BNB Chain</span>
-      <h1>Meme coins are sitting on</h1>
+      <span class="kicker" data-zh="BNB Chain 链上实时数据">Live from BNB Chain</span>
+      <h1 data-zh="Meme 币的池子里躺着">Meme coins are sitting on</h1>
       <div class="big" id="total">$—</div>
-      <h1>of real US stock.</h1>
-      <p class="sub" id="sub">Reading every stock-paired pool on PancakeSwap.</p>
+      <h1 data-zh="的真实美股。">of real US stock.</h1>
+      <p class="sub" id="sub" data-zh="正在读取 PancakeSwap 上每一个股票配对池。">Reading every stock-paired pool on PancakeSwap.</p>
     </div>
     <a class="teaser" href="payslip.html">
       <div class="cn">牛马工资条</div>
-      <div class="en">PAYSLIP · PAID IN STOCK</div>
-      <div class="row"><span>Employer</span><b>牛马 NIUMA</b></div>
-      <div class="row"><span>Paid in</span><b>S&amp;P 500 shares</b></div>
-      <div class="row"><span>Employee</span><b>you?</b></div>
-      <span class="go">Print my payslip →</span>
+      <div class="en" data-zh="工资条 · 以股票发薪">PAYSLIP · PAID IN STOCK</div>
+      <div class="row"><span data-zh="雇主">Employer</span><b>牛马 NIUMA</b></div>
+      <div class="row"><span data-zh="发放形式">Paid in</span><b data-zh="标普500 股份">S&amp;P 500 shares</b></div>
+      <div class="row"><span data-zh="员工">Employee</span><b data-zh="你？">you?</b></div>
+      <span class="go" data-zh="打印我的工资条 →">Print my payslip →</span>
       <span class="seal"><span>已发薪<small>PAID IN STOCK</small></span></span>
     </a>
   </section>
@@ -43,41 +44,47 @@
 
   <a class="niuma" id="niuma" hidden></a>
 
-  <h2 class="sec">Stock held by meme pools</h2>
+  <h2 class="sec" data-zh="Meme 池持有的股票">Stock held by meme pools</h2>
   <div class="tiles" id="tiles"></div>
 
   <div class="bar">
-    <h2 class="sec" id="league-title">The stock league</h2>
+    <h2 class="sec" id="league-title" data-zh="股票排行榜">The stock league</h2>
     <div class="nav">
       <div class="seg" id="sort">
-        <button data-k="stockUsd" class="on">Stock held</button>
-        <button data-k="mcap">Market cap</button>
-        <button data-k="vol24">24h volume</button>
+        <button data-k="stockUsd" class="on" data-zh="池内持股">Stock held</button>
+        <button data-k="mcap" data-zh="市值">Market cap</button>
+        <button data-k="vol24" data-zh="24小时成交">24h volume</button>
       </div>
       <div class="seg" id="scope">
-        <button data-all="0" class="on">$100K and up</button>
-        <button data-all="1">Show all</button>
+        <button data-all="0" class="on" data-zh="市值 $100K 以上">$100K and up</button>
+        <button data-all="1" data-zh="显示全部">Show all</button>
       </div>
     </div>
   </div>
   <div class="tablewrap">
     <table class="league">
-      <thead><tr><th>#</th><th>Coin</th><th>Trades against</th><th>Stock in its pool</th><th>Market cap</th><th>24h volume</th></tr></thead>
-      <tbody id="rows"><tr><td colspan="6" class="state">Loading pools</td></tr></tbody>
+      <thead><tr><th>#</th><th data-zh="币种">Coin</th><th data-zh="配对股票">Trades against</th><th data-zh="池内股票">Stock in its pool</th><th data-zh="市值">Market cap</th><th data-zh="24小时成交">24h volume</th></tr></thead>
+      <tbody id="rows"><tr><td colspan="6" class="state" data-zh="正在加载池子">Loading pools</td></tr></tbody>
     </table>
   </div>
-  <p class="note" id="note">Loading.</p>
+  <p class="note" id="note"></p>
 </div>
 
 <script src="shared.js"></script>
 <script>
+initLang();
 const state = { data: null, stock: 'ALL', sort: 'stockUsd', all: false, moreTiles: false };
 // Companies shown as tiles before the rest fold behind a More tile.
 const TOP_TILES = 5;
+const count = (n) => n.toLocaleString('en-US');
 
 async function load() {
   state.data = await loadLeague();
-  $('updated').textContent = 'Live · ' + new Date(state.data.updatedAt).toLocaleTimeString();
+  // After a restart the server answers with its last saved league until a fresh read finishes.
+  const at = new Date(state.data.updatedAt), old = Date.now() - at > 600000;
+  $('updated').textContent = old
+    ? t('Last read ', '上次读取 ') + at.toLocaleString(dateLocale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+    : t('Live · ', '实时 · ') + at.toLocaleTimeString();
   render();
 }
 
@@ -88,44 +95,51 @@ function render() {
   const shown = state.all ? rows : big;
 
   $('total').textContent = usd(stats.stockUsd);
-  $('sub').replaceChildren(
-    el('b', null, stats.poolsFound.toLocaleString('en-US') + ' pools'), ' pairing a coin with a stock token have been created on PancakeSwap. ',
-    el('b', null, stats.holdingStock.toLocaleString('en-US')), ' hold stock today, and ',
+  if (zh) $('sub').replaceChildren('PancakeSwap 上共创建了 ', el('b', null, count(stats.poolsFound) + ' 个'), ' 币与股票代币的配对池，其中 ',
+    el('b', null, count(stats.holdingStock) + ' 个'), ' 今天持有股票，', el('b', null, big.length + ' 个'), ' 币市值在 $100K 以上，合计 ', el('b', null, usd(sum(big, 'mcap'))), '。');
+  else $('sub').replaceChildren(
+    el('b', null, count(stats.poolsFound) + ' pools'), ' pairing a coin with a stock token have been created on PancakeSwap. ',
+    el('b', null, count(stats.holdingStock)), ' hold stock today, and ',
     el('b', null, String(big.length)), ' of those coins are worth $100K or more, ', el('b', null, usd(sum(big, 'mcap'))), ' between them.');
 
   const track = $('ticker');
-  const items = big.slice().sort((a, b) => b.stockUsd - a.stockUsd).slice(0, 14)
-    .map((m) => { const s = el('span'); s.append(el('b', null, m.coin), ' holds ' + num(m.shares) + ' ' + m.name + ' shares'); return s; });
+  const items = big.slice().sort((a, b) => b.stockUsd - a.stockUsd).slice(0, 14).map((m) => {
+    const s = el('span');
+    s.append(el('b', null, m.coin), zh ? ' 池内持有 ' + num(m.shares) + ' 股 ' + stockName(m) : ' holds ' + num(m.shares) + ' ' + m.name + ' shares');
+    return s;
+  });
   track.replaceChildren(...items, ...items.map((n) => n.cloneNode(true)));
 
   // One tile per company, even when it has more than one token.
   const by = {};
-  for (const m of shown) { const b = by[m.ticker] ??= { key: m.ticker, name: m.name, n: 0, shares: 0, stockUsd: 0 }; b.n++; b.shares += m.shares; b.stockUsd += m.stockUsd; }
+  for (const m of shown) { const b = by[m.ticker] ??= { key: m.ticker, name: stockName(m), n: 0, shares: 0, stockUsd: 0 }; b.n++; b.shares += m.shares; b.stockUsd += m.stockUsd; }
   if (state.stock !== 'ALL' && !by[state.stock]) state.stock = 'ALL';
   const companies = Object.values(by).sort((x, y) => y.stockUsd - x.stockUsd);
   const top = state.moreTiles ? companies : companies.filter((c, i) => i < TOP_TILES || c.key === state.stock);
   const tiles = $('tiles');
   tiles.replaceChildren();
   const tile = (title, value, meta, on, click) => {
-    const t = el('button', 'tile' + (on ? ' on' : ''));
-    t.append(el('div', 's', title), el('div', 'v', value), el('div', 'm', meta));
-    t.onclick = click;
-    return t;
+    const tl = el('button', 'tile' + (on ? ' on' : ''));
+    tl.append(el('div', 's', title), el('div', 'v', value), el('div', 'm', meta));
+    tl.onclick = click;
+    return tl;
   };
+  const coins = (n) => zh ? n + ' 个币' : n + (String(n) === '1' ? ' coin' : ' coins');
   const choose = (key) => () => { state.stock = key; render(); };
-  tiles.append(tile('All stocks', usd(sum(shown, 'stockUsd')), shown.length.toLocaleString('en-US') + ' coins', state.stock === 'ALL', choose('ALL')));
-  for (const c of top) tiles.append(tile(c.name, usd(c.stockUsd), num(c.shares) + ' shares · ' + c.n + (c.n === 1 ? ' coin' : ' coins'), state.stock === c.key, choose(c.key)));
-  if (companies.length > top.length || state.moreTiles && companies.length > TOP_TILES) {
+  tiles.append(tile(t('All stocks', '全部股票'), usd(sum(shown, 'stockUsd')), coins(count(shown.length)), state.stock === 'ALL', choose('ALL')));
+  for (const c of top) tiles.append(tile(c.name, usd(c.stockUsd), num(c.shares) + t(' shares · ', ' 股 · ') + coins(c.n), state.stock === c.key, choose(c.key)));
+  if (companies.length > TOP_TILES) {
     const rest = companies.length - top.length;
-    tiles.append(tile(state.moreTiles ? 'Fewer' : 'More', state.moreTiles ? '−' : '+' + rest, state.moreTiles ? 'show the top ' + TOP_TILES : 'other companies', false, () => { state.moreTiles = !state.moreTiles; render(); }));
+    tiles.append(tile(state.moreTiles ? t('Fewer', '收起') : t('More', '更多'), state.moreTiles ? '−' : '+' + rest,
+      state.moreTiles ? t('show the top ' + TOP_TILES, '只看前 ' + TOP_TILES + ' 家') : t('other companies', '家其他公司'), false, () => { state.moreTiles = !state.moreTiles; render(); }));
   }
 
   const list = (state.stock === 'ALL' ? shown : shown.filter((m) => m.ticker === state.stock)).slice().sort((a, b) => (b[state.sort] || 0) - (a[state.sort] || 0));
-  $('league-title').textContent = state.stock === 'ALL' ? 'The stock league' : 'The ' + by[state.stock].name + ' league';
+  $('league-title').textContent = state.stock === 'ALL' ? t('The stock league', '股票排行榜') : t('The ' + by[state.stock].name + ' league', by[state.stock].name + ' 排行榜');
   const body = $('rows');
   body.replaceChildren();
   if (!list.length) {
-    const td = el('td', 'state', 'No coins match yet.');
+    const td = el('td', 'state', t('No coins match yet.', '暂无符合条件的币。'));
     td.colSpan = 6;
     const tr = el('tr');
     tr.append(td);
@@ -136,21 +150,22 @@ function render() {
     const coin = el('td');
     const who = el('div', 'who');
     const names = el('div');
-    names.append(el('span', 'coin', m.coin), el('span', 'addr', short(m.address)), el('span', 'addr mini', m.name));
+    names.append(el('span', 'coin', m.coin), el('span', 'addr', short(m.address)), el('span', 'addr mini', stockName(m)));
     who.append(avatar(m.logo, m.coin), names);
     coin.append(who);
     const stock = el('td');
-    stock.append(el('span', 'pill', m.name));
+    stock.append(el('span', 'pill', stockName(m)));
     const held = el('td', null, usd(m.stockUsd));
-    held.append(el('span', 'shares', num(m.shares) + ' shares'));
+    held.append(el('span', 'shares', num(m.shares) + t(' shares', ' 股')));
     const cap = el('td', null, usd(m.mcap));
     if (m.change24 != null) cap.append(el('span', 'shares ' + (m.change24 >= 0 ? 'up' : 'down'), pct(m.change24) + ' 24h'));
     tr.append(el('td', null, String(i + 1)), coin, stock, held, cap, el('td', null, m.vol24 != null ? usd(m.vol24) : '—'));
     tr.onclick = () => { location.href = 'coin.html?a=' + m.address; };
     body.append(tr);
   });
-  $('note').textContent = `Read straight from BNB Chain: PancakeSwap v2 pairs ${scan.from.toLocaleString('en-US')} to ${scan.to.toLocaleString('en-US')} were checked against Binance's list of tokenized stocks, then balances, supplies and prices were read from the contracts. Market cap is price times supply, minus burned tokens. Logos, 24h volume and 24h change come from the Binance Web3 API. The default list shows coins worth $100K or more with at least $1,000 of stock in the pool`
-    + (list.length > 200 ? '; the first 200 rows are shown' : '') + '. Pool liquidity belongs to liquidity providers; it does not back the coin\'s price.';
+  $('note').textContent = zh
+    ? `数据直接读自 BNB Chain：将 PancakeSwap v2 第 ${count(scan.from)} 至 ${count(scan.to)} 个交易对与币安的代币化股票名单逐一比对，再从合约读取余额、供应量和价格。市值 = 价格 × 供应量（扣除已销毁部分）。Logo、24小时成交额和涨跌幅来自币安 Web3 API。默认只列出市值 $100K 以上且池内股票不少于 $1,000 的币` + (list.length > 200 ? '；仅显示前 200 行' : '') + '。池内流动性属于流动性提供者，并不为币价背书。'
+    : `Read straight from BNB Chain: PancakeSwap v2 pairs ${count(scan.from)} to ${count(scan.to)} were checked against Binance's list of tokenized stocks, then balances, supplies and prices were read from the contracts. Market cap is price times supply, minus burned tokens. Logos, 24h volume and 24h change come from the Binance Web3 API. The default list shows coins worth $100K or more with at least $1,000 of stock in the pool` + (list.length > 200 ? '; the first 200 rows are shown' : '') + '. Pool liquidity belongs to liquidity providers; it does not back the coin\'s price.';
   renderNiuma(rows);
 }
 
@@ -158,6 +173,7 @@ function renderNiuma(all) {
   const box = $('niuma');
   const me = all.find((m) => m.address === NIUMA);
   if (!me) { box.hidden = true; return; }
+  const name = stockName(me);
   const peers = all.filter((m) => m.sym === me.sym);
   const rankBy = (list, k) => list.slice().sort((a, b) => b[k] - a[k]).findIndex((m) => m.address === NIUMA) + 1;
   const byHeld = peers.slice().sort((a, b) => b.shares - a.shares);
@@ -165,18 +181,19 @@ function renderNiuma(all) {
   const left = el('div');
   const p = el('p');
   if (pos > 0) {
-    const ahead = byHeld[pos - 1];
-    p.append('Only ', el('b', null, (ahead.shares - me.shares).toFixed(3) + ' shares'), ' behind ' + ahead.coin + ' for the top spot in the ' + me.name + ' league.');
+    const ahead = byHeld[pos - 1], gap = (ahead.shares - me.shares).toFixed(3);
+    if (zh) p.append('距离 ' + name + ' 榜首 ' + ahead.coin + ' 只差 ', el('b', null, gap + ' 股'), '。');
+    else p.append('Only ', el('b', null, gap + ' shares'), ' behind ' + ahead.coin + ' for the top spot in the ' + name + ' league.');
   } else {
-    p.append('The largest ' + me.name + ' holder of any meme community on BNB Chain.');
+    p.append(t('The largest ' + name + ' holder of any meme community on BNB Chain.', 'BNB Chain 上持有 ' + name + ' 最多的 Meme 社区。'));
   }
-  left.append(el('h2', null, '牛马 NIUMA holds ' + num(me.shares) + ' shares of the ' + me.name), p);
+  left.append(el('h2', null, t('牛马 NIUMA holds ' + num(me.shares) + ' shares of the ' + name, '牛马 NIUMA 池内持有 ' + num(me.shares) + ' 股 ' + name)), p);
   const ranks = el('div', 'ranks');
-  const rank = (n, t) => { const r = el('div', 'rank'); r.append(el('div', 'n', '#' + n), el('div', 't', t)); return r; };
+  const rank = (n, label) => { const r = el('div', 'rank'); r.append(el('div', 'n', '#' + n), el('div', 't', label)); return r; };
   ranks.append(
-    rank(rankBy(peers, 'mcap'), me.name + ' by size'),
-    rank(pos + 1, me.name + ' by stock'),
-    rank(rankBy(all, 'stockUsd'), 'of ' + all.length.toLocaleString('en-US') + ' coins'));
+    rank(rankBy(peers, 'mcap'), t(name + ' by size', name + ' 市值排名')),
+    rank(pos + 1, t(name + ' by stock', name + ' 持股排名')),
+    rank(rankBy(all, 'stockUsd'), t('of ' + count(all.length) + ' coins', '共 ' + count(all.length) + ' 个币')));
   box.replaceChildren(avatar(me.logo, me.coin), left, ranks);
   box.href = 'coin.html?a=' + NIUMA;
   box.hidden = false;
@@ -195,9 +212,9 @@ pick('sort', 'k', (v) => { state.sort = v; });
 pick('scope', 'all', (v) => { state.all = v === '1'; });
 
 const refresh = () => load().catch((err) => {
-  $('updated').textContent = 'Could not load live data: ' + err.message;
+  $('updated').textContent = t('Could not load live data: ', '无法加载实时数据：') + err.message;
   if (!state.data) {
-    const td = el('td', 'state', 'The league is still being read from the chain. Retrying shortly.');
+    const td = el('td', 'state', t('The league is still being read from the chain. Retrying shortly.', '排行榜仍在从链上读取，稍后自动重试。'));
     td.colSpan = 6;
     const tr = el('tr');
     tr.append(td);

@@ -14,12 +14,13 @@
   <div class="top">
     <a class="brand" href="index.html">STOCKYARD <small>牛马</small></a>
     <nav class="nav">
-      <span class="live"><span class="dot"></span><span id="updated">Loading live data</span></span>
-      <a href="index.html">League</a>
-      <a class="cta" href="payslip.html">工资条 Payslip</a>
+      <span class="live"><span class="dot"></span><span id="updated" data-zh="正在加载实时数据">Loading live data</span></span>
+      <a href="index.html" data-zh="排行榜">League</a>
+      <a class="cta" href="payslip.html" data-zh="工资条">工资条 Payslip</a>
+      <button class="lang" id="lang" type="button">中文</button>
     </nav>
   </div>
-  <a class="back" href="index.html">← All stock memes</a>
+  <a class="back" href="index.html" data-zh="← 全部股票 Meme">← All stock memes</a>
 
   <div id="page" hidden>
     <div class="title" id="title"></div>
@@ -27,11 +28,11 @@
     <div class="stats" id="stats"></div>
 
     <div class="bar">
-      <h2 class="sec">What moved the price</h2>
+      <h2 class="sec" data-zh="价格为什么变动">What moved the price</h2>
       <div class="seg" id="win">
-        <button data-h="24" class="on">24 hours</button>
-        <button data-h="72">3 days</button>
-        <button data-h="168">7 days</button>
+        <button data-h="24" class="on" data-zh="24小时">24 hours</button>
+        <button data-h="72" data-zh="3天">3 days</button>
+        <button data-h="168" data-zh="7天">7 days</button>
       </div>
     </div>
     <div class="card">
@@ -43,13 +44,13 @@
     </div>
 
     <div id="company-wrap" hidden>
-      <h2 class="sec">The stock behind this coin</h2>
+      <h2 class="sec" data-zh="这个币背后的股票">The stock behind this coin</h2>
       <div class="card company" id="company"></div>
     </div>
 
     <div class="two">
       <div>
-        <h2 class="sec">Sell and keep the stock</h2>
+        <h2 class="sec" data-zh="卖出，并留下股票">Sell and keep the stock</h2>
         <div class="card sell">
           <label for="amount" id="amount-label">Amount to sell</label>
           <input id="amount" inputmode="decimal" value="100000" autocomplete="off">
@@ -59,7 +60,7 @@
         </div>
       </div>
       <div>
-        <h2 class="sec">Stock moving through the pool</h2>
+        <h2 class="sec" data-zh="流经池子的股票">Stock moving through the pool</h2>
         <div class="card">
           <p class="note" id="flow" style="margin-top:0"></p>
           <ul class="tape" id="tape"></ul>
@@ -67,20 +68,21 @@
       </div>
     </div>
 
-    <h2 class="sec">Where this coin trades</h2>
+    <h2 class="sec" data-zh="这个币在哪里交易">Where this coin trades</h2>
     <div class="tablewrap">
       <table class="pools">
-        <thead><tr><th>Trades against</th><th>Liquidity</th><th>Share of liquidity</th></tr></thead>
+        <thead><tr><th data-zh="配对资产">Trades against</th><th data-zh="流动性">Liquidity</th><th data-zh="流动性占比">Share of liquidity</th></tr></thead>
         <tbody id="pools"></tbody>
       </table>
     </div>
-    <p class="note">The pool is read from BNB Chain. Prices, hourly history, trades, pools, quotes, the dry run and the stock's profile come from the Binance Web3 API. Coin tax comes from GoPlus. US market hours ignore public holidays.</p>
+    <p class="note" data-zh="池子数据读自 BNB Chain。价格、小时级历史、成交、池子、报价、模拟执行和股票资料来自币安 Web3 API。交易税来自 GoPlus。美股开盘时间未考虑公共假期。">The pool is read from BNB Chain. Prices, hourly history, trades, pools, quotes, the dry run and the stock's profile come from the Binance Web3 API. Coin tax comes from GoPlus. US market hours ignore public holidays.</p>
   </div>
-  <div class="state" id="state">Loading coin</div>
+  <div class="state" id="state" data-zh="正在加载">Loading coin</div>
 </div>
 
 <script src="shared.js"></script>
 <script>
+initLang();
 const addr = (new URLSearchParams(location.search).get('a') || NIUMA).toLowerCase();
 const USDT = '0x55d398326f99059ff775485246999027b3197955';
 const S = { hours: 24, seen: new Set(), d: null, quotes: null, wallet: null, plan: null };
@@ -98,22 +100,22 @@ async function loadCoin() { S.d = await apiJson('/api/coin?a=' + addr); }
 
 async function loadSafety() {
   try {
-    const t = Object.values((await getJson('https://api.gopluslabs.io/api/v1/token_security/56?contract_addresses=' + addr)).result || {})[0];
-    if (!t) return;
-    S.buyTax = t.buy_tax === '' ? null : Number(t.buy_tax);
-    S.sellTax = t.sell_tax === '' ? null : Number(t.sell_tax);
+    const sec = Object.values((await getJson('https://api.gopluslabs.io/api/v1/token_security/56?contract_addresses=' + addr)).result || {})[0];
+    if (!sec) return;
+    S.buyTax = sec.buy_tax === '' ? null : Number(sec.buy_tax);
+    S.sellTax = sec.sell_tax === '' ? null : Number(sec.sell_tax);
   } catch {}
 }
 
 function windowed(series, hours) {
   if (!series || series.length < 2) return null;
   const now = Date.now() / 1000, cut = now - hours * 3600;
-  const before = series.filter(([t]) => t < cut).pop();
-  const inside = series.filter(([t]) => t >= cut);
+  const before = series.filter(([at]) => at < cut).pop();
+  const inside = series.filter(([at]) => at >= cut);
   if (!before && !inside.length) return null;
   const start = before ? before[1] : inside[0][1];
   const end = series[series.length - 1][1];
-  const points = [[before ? cut : inside[0][0], 0], ...inside.map(([t, v]) => [Math.min(t + 3600, now), v / start - 1])];
+  const points = [[before ? cut : inside[0][0], 0], ...inside.map(([at, v]) => [Math.min(at + 3600, now), v / start - 1])];
   return { change: end / start - 1, points, cut, now };
 }
 
@@ -128,7 +130,7 @@ function marketClock() {
   return { open: false, wait: 1440 - mins + (days - 1) * 1440 + 570 };
 }
 const span = (m) => m >= 1440 ? Math.floor(m / 1440) + 'd ' + Math.floor((m % 1440) / 60) + 'h' : Math.floor(m / 60) + 'h ' + (m % 60) + 'm';
-const ago = (ms) => { const m = Math.max(0, Math.round((Date.now() - ms) / 60000)); return m < 1 ? 'now' : m < 60 ? m + 'm ago' : Math.floor(m / 60) + 'h ago'; };
+const ago = (ms) => { const m = Math.max(0, Math.round((Date.now() - ms) / 60000)); return m < 1 ? t('now', '刚刚') : m < 60 ? m + t('m ago', '分钟前') : Math.floor(m / 60) + t('h ago', '小时前'); };
 const stat = (k, v, m, cls) => { const s = el('div', 'stat' + (cls ? ' ' + cls : '')); s.append(el('div', 'k', k), el('div', 'v', v)); if (m) s.append(el('div', 'm', m)); return s; };
 const link = (text, href) => { const a = el('a', null, text); a.href = href; a.target = '_blank'; a.rel = 'noopener'; return a; };
 
@@ -138,25 +140,25 @@ function renderHead() {
   const chip = el('span', 'chip');
   chip.id = 'chg';
   $('title').replaceChildren(avatar(coin.logo, coin.symbol), el('h1', null, coin.symbol), el('span', 'price', usd(coin.price)), chip);
-  const meta = [el('span', 'pill', 'Trades against ' + stock.name), el('span', null, short(addr)), link('BscScan', 'https://bscscan.com/token/' + addr), link('Pool', 'https://bscscan.com/address/' + pool.pair)];
-  if (coin.created) meta.push(el('span', null, 'Launched ' + new Date(coin.created).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })));
+  const meta = [el('span', 'pill', t('Trades against ', '配对：') + stockName(stock)), el('span', null, short(addr)), link('BscScan', 'https://bscscan.com/token/' + addr), link(t('Pool', '池子'), 'https://bscscan.com/address/' + pool.pair)];
+  if (coin.created) meta.push(el('span', null, t('Launched ', '上线于 ') + new Date(coin.created).toLocaleDateString(dateLocale, { day: 'numeric', month: 'short', year: 'numeric' })));
   $('meta').replaceChildren(...meta);
   const allLiq = pools.reduce((a, x) => a + x.usd, 0), stockLiq = pools.filter((x) => x.isStock).reduce((a, x) => a + x.usd, 0);
   const stats = $('stats');
   stats.replaceChildren(
-    stat('Market cap', usd(coin.mcap)),
-    stat('24h volume', coin.vol24 != null ? usd(coin.vol24) : '—'),
-    stat(stock.name + ' in its pool', num(pool.shares) + ' shares', 'worth ' + usd(pool.stockUsd)));
-  if (allLiq) stats.append(stat('Liquidity against stock', Math.round(stockLiq / allLiq * 100) + '%', usd(allLiq) + ' in all pools'));
-  if (coin.holders) stats.append(stat('Holders', coin.holders.toLocaleString('en-US'), coin.top10 ? 'top 10 hold ' + coin.top10.toFixed(0) + '%' : null));
-  if (S.sellTax != null) stats.append(stat('Coin tax', (S.buyTax * 100).toFixed(1) + '% / ' + (S.sellTax * 100).toFixed(1) + '%', 'on buys / on sells'));
+    stat(t('Market cap', '市值'), usd(coin.mcap)),
+    stat(t('24h volume', '24小时成交额'), coin.vol24 != null ? usd(coin.vol24) : '—'),
+    stat(t(stock.name + ' in its pool', '池内 ' + stockName(stock)), num(pool.shares) + t(' shares', ' 股'), t('worth ', '价值 ') + usd(pool.stockUsd)));
+  if (allLiq) stats.append(stat(t('Liquidity against stock', '股票池占流动性'), Math.round(stockLiq / allLiq * 100) + '%', t(usd(allLiq) + ' in all pools', '全部池子共 ' + usd(allLiq))));
+  if (coin.holders) stats.append(stat(t('Holders', '持有人'), coin.holders.toLocaleString('en-US'), coin.top10 ? t('top 10 hold ', '前10名持有 ') + coin.top10.toFixed(0) + '%' : null));
+  if (S.sellTax != null) stats.append(stat(t('Coin tax', '交易税'), (S.buyTax * 100).toFixed(1) + '% / ' + (S.sellTax * 100).toFixed(1) + '%', t('on buys / on sells', '买入 / 卖出')));
 
   const rows = $('pools');
   rows.replaceChildren();
   for (const x of pools) {
     const tr = el('tr');
     const name = el('td');
-    name.append(el('span', 'coin', x.against), el('span', 'addr', x.protocol || ''));
+    name.append(el('span', 'coin', x.isStock ? stockName(stock) : x.against), el('span', 'addr', x.protocol || ''));
     const share = el('td');
     const meter = el('div', 'meter');
     const fill = el('i');
@@ -175,19 +177,22 @@ function renderMove() {
   chart.replaceChildren(); chart.hidden = true; legend.replaceChildren();
   if (!c || !s) {
     split.replaceChildren(); chg.hidden = true;
-    story.textContent = 'Price history for this window is not available right now.';
+    story.textContent = t('Price history for this window is not available right now.', '暂时拿不到这个时间段的价格历史。');
     return;
   }
   const coinChange = c.change, stockChange = s.change, meme = (1 + coinChange) / (1 + stockChange) - 1;
   const cls = (x) => x >= 0 ? 'up' : 'down';
   const big = (k, x, m, extra) => { const n = stat(k, pct(x), m, extra); if (!extra) n.querySelector('.v').classList.add(cls(x)); return n; };
   split.replaceChildren(
-    big(coin.symbol + ' in dollars', coinChange, 'what your wallet shows', 'total'),
-    big('From the meme', meme, 'people trading ' + coin.symbol),
-    big('From the stock', stockChange, stock.name + ' token moving'));
-  const verb = (x) => x >= 0 ? 'rose' : 'fell';
-  const label = { 24: 'the last 24 hours', 72: 'the last 3 days', 168: 'the last 7 days' }[S.hours];
-  story.textContent = `Over ${label}, ${coin.symbol} ${verb(coinChange)} ${Math.abs(coinChange * 100).toFixed(1)}% in dollars. The ${stock.name} token ${verb(stockChange)} ${Math.abs(stockChange * 100).toFixed(1)}%, so the meme itself ${verb(meme)} ${Math.abs(meme * 100).toFixed(1)}% against the stock.`;
+    big(t(coin.symbol + ' in dollars', coin.symbol + ' 美元价格'), coinChange, t('what your wallet shows', '你钱包里看到的涨跌'), 'total'),
+    big(t('From the meme', '来自 Meme 本身'), meme, t('people trading ' + coin.symbol, '大家买卖 ' + coin.symbol)),
+    big(t('From the stock', '来自股票'), stockChange, t(stock.name + ' token moving', stockName(stock) + ' 代币的波动')));
+  const verb = (x) => x >= 0 ? t('rose', '涨了') : t('fell', '跌了');
+  const label = zh ? { 24: '过去24小时', 72: '过去3天', 168: '过去7天' }[S.hours] : { 24: 'the last 24 hours', 72: 'the last 3 days', 168: 'the last 7 days' }[S.hours];
+  const abs = (x) => Math.abs(x * 100).toFixed(1) + '%';
+  story.textContent = zh
+    ? `${label}，${coin.symbol} 以美元计${verb(coinChange)} ${abs(coinChange)}。${stockName(stock)} 代币${verb(stockChange)} ${abs(stockChange)}，所以 Meme 本身相对股票${verb(meme)} ${abs(meme)}。`
+    : `Over ${label}, ${coin.symbol} ${verb(coinChange)} ${abs(coinChange)} in dollars. The ${stock.name} token ${verb(stockChange)} ${abs(stockChange)}, so the meme itself ${verb(meme)} ${abs(meme)} against the stock.`;
   chg.hidden = false;
   chg.textContent = pct(coinChange) + ' · ' + { 24: '24h', 72: '3d', 168: '7d' }[S.hours];
   chg.className = 'chip ' + cls(coinChange);
@@ -195,7 +200,7 @@ function renderMove() {
   const W = 680, H = 190, pad = 12;
   const ys = [...c.points, ...s.points].map((p) => p[1]).concat(0);
   const lo = Math.min(...ys), hi = Math.max(...ys), range = hi - lo || 1;
-  const x = (t) => pad + (t - c.cut) / (c.now - c.cut) * (W - 2 * pad);
+  const x = (at) => pad + (at - c.cut) / (c.now - c.cut) * (W - 2 * pad);
   const y = (v) => pad + (hi - v) / range * (H - 2 * pad);
   const ns = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(ns, 'svg');
@@ -204,22 +209,22 @@ function renderMove() {
   svg.setAttribute('aria-label', `${coin.symbol} and ${stock.name} token price change over ${label}`);
   const add = (tag, attrs) => { const n = document.createElementNS(ns, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); svg.append(n); };
   add('line', { x1: pad, x2: W - pad, y1: y(0), y2: y(0), stroke: '#cfc8b4', 'stroke-width': 1.5, 'stroke-dasharray': '5 5' });
-  const path = (pts) => [...pts, [c.now, pts[pts.length - 1][1]]].map(([t, v]) => x(Math.max(t, c.cut)).toFixed(1) + ',' + y(v).toFixed(1)).join(' ');
+  const path = (pts) => [...pts, [c.now, pts[pts.length - 1][1]]].map(([at, v]) => x(Math.max(at, c.cut)).toFixed(1) + ',' + y(v).toFixed(1)).join(' ');
   add('polyline', { points: path(s.points), fill: 'none', stroke: '#121212', 'stroke-width': 2, 'stroke-dasharray': '2 6', 'stroke-linecap': 'round' });
   add('polyline', { points: path(c.points), fill: 'none', stroke: '#121212', 'stroke-width': 7, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' });
   add('polyline', { points: path(c.points), fill: 'none', stroke: '#ffd400', 'stroke-width': 3.5, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' });
   chart.append(svg);
   chart.hidden = false;
   const key = (css, text) => { const k = el('span'); const i = el('i'); i.style.cssText = css; k.append(i, text); return k; };
-  legend.append(key('background:#ffd400;outline:2px solid #121212', coin.symbol + ' in dollars'), key('background:repeating-linear-gradient(90deg,#121212 0 3px,transparent 3px 7px)', stock.name + ' token'));
+  legend.append(key('background:#ffd400;outline:2px solid #121212', t(coin.symbol + ' in dollars', coin.symbol + ' 美元价格')), key('background:repeating-linear-gradient(90deg,#121212 0 3px,transparent 3px 7px)', t(stock.name + ' token', stockName(stock) + ' 代币')));
 }
 
 function renderClock() {
-  const m = marketClock(), box = $('clock'), name = S.d.stock.name;
+  const m = marketClock(), box = $('clock'), name = stockName(S.d.stock);
   const dot = el('span', 'dot' + (m.open ? '' : ' closed'));
   const text = el('span');
-  if (m.open) text.append(el('b', null, 'US market open'), ` · The ${name} token should track the real stock closely. Closes in ${span(m.wait)}.`);
-  else text.append(el('b', null, 'US market closed'), ` · The ${name} token keeps trading, so its price can drift from the real stock. Reopens in ${span(m.wait)}.`);
+  if (m.open) text.append(el('b', null, t('US market open', '美股开盘中')), zh ? ` · ${name} 代币应当紧跟真实股价。${span(m.wait)} 后收盘。` : ` · The ${name} token should track the real stock closely. Closes in ${span(m.wait)}.`);
+  else text.append(el('b', null, t('US market closed', '美股已收盘')), zh ? ` · ${name} 代币仍在交易，价格可能偏离真实股价。${span(m.wait)} 后开盘。` : ` · The ${name} token keeps trading, so its price can drift from the real stock. Reopens in ${span(m.wait)}.`);
   box.replaceChildren(dot, text);
 }
 
@@ -228,17 +233,17 @@ function renderCompany() {
   if (!s.about && !s.refPrice) { $('company-wrap').hidden = true; return; }
   const head = el('div', 'who');
   const names = el('div');
-  names.append(el('span', 'coin', s.name + (s.nameZh ? ' · ' + s.nameZh : '')), el('span', 'addr', [s.sym, s.industry].filter(Boolean).join(' · ')));
+  names.append(el('span', 'coin', zh && s.nameZh ? s.nameZh + ' · ' + s.name : s.name + (s.nameZh ? ' · ' + s.nameZh : '')), el('span', 'addr', [s.sym, s.industry].filter(Boolean).join(' · ')));
   head.append(avatar(s.logo, s.name), names);
   const facts = el('div', 'stats');
   if (s.tokenPrice && s.refPrice) {
     const gap = s.tokenPrice / s.refPrice - 1;
-    facts.append(stat('Token price', usd(s.tokenPrice), 'on BNB Chain'), stat('Reference price', usd(s.refPrice), 'the real share'), stat('Gap', pct(gap), gap >= 0 ? 'token costs more' : 'token costs less'));
+    facts.append(stat(t('Token price', '代币价格'), usd(s.tokenPrice), t('on BNB Chain', 'BNB Chain 上')), stat(t('Reference price', '参考价格'), usd(s.refPrice), t('the real share', '真实股价')), stat(t('Gap', '价差'), pct(gap), gap >= 0 ? t('token costs more', '代币更贵') : t('token costs less', '代币更便宜')));
   }
-  if (s.high52 && s.low52) facts.append(stat('52-week range', usd(s.low52) + ' – ' + usd(s.high52)));
-  if (s.backed != null) facts.append(stat('Collateral report', s.backed ? 'Published' : 'Not listed', 'by the issuer'));
+  if (s.high52 && s.low52) facts.append(stat(t('52-week range', '52周区间'), usd(s.low52) + ' – ' + usd(s.high52)));
+  if (s.backed != null) facts.append(stat(t('Collateral report', '抵押证明'), s.backed ? t('Published', '已公布') : t('Not listed', '未列出'), t('by the issuer', '由发行方提供')));
   box.replaceChildren(head);
-  if (s.about) box.append(el('p', 'story', s.about));
+  if (s.about) box.append(el('p', 'story', (zh && s.aboutZh) || s.about));
   box.append(facts);
   if (s.website) { const p = el('p', 'note'); p.append(link(s.website.replace(/^https?:\/\//, ''), s.website)); box.append(p); }
   $('company-wrap').hidden = false;
@@ -271,19 +276,21 @@ async function loadQuotes() {
 
 function renderSell() {
   const { coin, stock } = S.d;
-  $('amount-label').textContent = coin.symbol + ' to sell';
+  $('amount-label').textContent = t(coin.symbol + ' to sell', '卖出 ' + coin.symbol + ' 数量');
   const opts = $('opts'), note = $('sell-note');
   opts.replaceChildren();
-  if (!amountUnits()) { note.textContent = 'Enter an amount to see what you would receive.'; renderTrade(); return; }
-  if (!S.quotes) { note.textContent = 'Getting quotes from Binance.'; renderTrade(); return; }
+  if (!amountUnits()) { note.textContent = t('Enter an amount to see what you would receive.', '输入数量，查看你能换到什么。'); renderTrade(); return; }
+  if (!S.quotes) { note.textContent = t('Getting quotes from Binance.', '正在向币安获取报价。'); renderTrade(); return; }
   const { keep, cash } = S.quotes;
-  const hops = (q) => { const n = q.hops.length - 1; return n + (n === 1 ? ' swap' : ' swaps'); };
+  const hops = (q) => { const n = q.hops.length - 1; return zh ? n + ' 次兑换' : n + (n === 1 ? ' swap' : ' swaps'); };
   const opt = (k, tag, v, m, best) => { const o = el('div', 'opt' + (best ? ' best' : '')); const kk = el('div', 'k', k); if (tag) kk.append(el('span', null, tag)); o.append(kk, el('div', 'v', v), el('div', 'm', m)); return o; };
-  if (keep.error) opts.append(opt('Keep the stock', null, 'No quote', keep.error, true));
-  else { const out = Number(keep.toAmount) / 1e18; opts.append(opt('Keep the stock', hops(keep), num(out) + ' shares', stock.name + ', worth about ' + usd(out * (stock.price || 0)), true)); }
-  if (cash.error) opts.append(opt('Take cash', null, 'No quote', cash.error));
-  else opts.append(opt('Take cash', hops(cash), usd(Number(cash.toAmount) / 1e18), 'in USDT'));
-  note.textContent = keep.error ? 'Binance could not quote this amount.'
+  const keepLabel = t('Keep the stock', '留下股票'), cashLabel = t('Take cash', '换成现金'), none = t('No quote', '无报价');
+  if (keep.error) opts.append(opt(keepLabel, null, none, keep.error, true));
+  else { const out = Number(keep.toAmount) / 1e18; opts.append(opt(keepLabel, hops(keep), num(out) + t(' shares', ' 股'), t(stock.name + ', worth about ', stockName(stock) + '，约值 ') + usd(out * (stock.price || 0)), true)); }
+  if (cash.error) opts.append(opt(cashLabel, null, none, cash.error));
+  else opts.append(opt(cashLabel, hops(cash), usd(Number(cash.toAmount) / 1e18), t('in USDT', '以 USDT 计')));
+  note.textContent = keep.error ? t('Binance could not quote this amount.', '币安无法为这个数量报价。')
+    : zh ? `币安聚合器实时报价（${keep.vendor}）。价格影响 ${(keep.priceImpact * 100).toFixed(2)}%。` + (S.sellTax ? `这个币卖出时还会收 ${(S.sellTax * 100).toFixed(1)}% 的税。` : '')
     : `Live quotes from Binance's aggregator (${keep.vendor}). Price impact ${(keep.priceImpact * 100).toFixed(2)}%.` + (S.sellTax ? ` This coin also takes a ${(S.sellTax * 100).toFixed(1)}% tax on sells.` : '');
   renderTrade();
 }
@@ -296,24 +303,24 @@ function renderTrade(message, isError) {
   const button = (text, fn, plain) => { const b = el('button', 'btn' + (plain ? ' plain' : ''), text); b.type = 'button'; b.onclick = fn; box.append(b); };
   if (message) say(message, isError ? 'down' : null);
   if (!S.quotes || S.quotes.keep.error) return;
-  if (!window.ethereum) { say('To trade, open this page in a browser with a BNB Chain wallet such as MetaMask or Binance Wallet.'); return; }
-  if (!S.wallet) { button('Connect wallet', connect); return; }
+  if (!window.ethereum) { say(t('To trade, open this page in a browser with a BNB Chain wallet such as MetaMask or Binance Wallet.', '要交易，请在装有 BNB Chain 钱包（如 MetaMask 或币安钱包）的浏览器中打开本页。')); return; }
+  if (!S.wallet) { button(t('Connect wallet', '连接钱包'), connect); return; }
   const p = S.plan;
-  if (!p) { say('Wallet ' + short(S.wallet)); button('Check this trade', check); return; }
-  say(`Wallet ${short(S.wallet)} holds ${num(p.wallet.balance)} ${coin.symbol}.`);
-  if (!p.wallet.enough) { say('That is less than the amount entered.', 'down'); return; }
+  if (!p) { say(t('Wallet ', '钱包 ') + short(S.wallet)); button(t('Check this trade', '检查这笔交易'), check); return; }
+  say(zh ? `钱包 ${short(S.wallet)} 持有 ${num(p.wallet.balance)} ${coin.symbol}。` : `Wallet ${short(S.wallet)} holds ${num(p.wallet.balance)} ${coin.symbol}.`);
+  if (!p.wallet.enough) { say(t('That is less than the amount entered.', '少于你输入的数量。'), 'down'); return; }
   if (p.wallet.needsApproval) {
-    say(`Step 1 of 2: let Binance's router spend exactly this amount of ${coin.symbol}.` + (p.dryRun ? (p.dryRun.ok ? ' Dry run passed.' : ' Dry run failed: ' + (p.dryRun.reason || p.dryRun.status)) : ''), p.dryRun && !p.dryRun.ok ? 'down' : null);
-    button('Approve ' + coin.symbol, () => send(p.approveTx, 'approval'));
+    say((zh ? `第 1 步（共 2 步）：授权币安路由合约动用恰好这个数量的 ${coin.symbol}。` : `Step 1 of 2: let Binance's router spend exactly this amount of ${coin.symbol}.`) + (p.dryRun ? (p.dryRun.ok ? t(' Dry run passed.', '模拟执行通过。') : t(' Dry run failed: ', '模拟执行失败：') + (p.dryRun.reason || p.dryRun.status)) : ''), p.dryRun && !p.dryRun.ok ? 'down' : null);
+    button(t('Approve ', '授权 ') + coin.symbol, () => send(p.approveTx, 'approval'));
     return;
   }
   const out = Number(p.quote.toAmount) / 1e18;
   if (p.dryRun?.ok) {
-    say(`Dry run passed on Binance's Transaction API. You would receive about ${num(out)} ${stock.name} shares, with up to ${p.slippage}% slippage allowed.`, 'up');
-    button('Sell and keep the stock', () => send(p.swapTx, 'swap'));
+    say(zh ? `已在币安 Transaction API 上模拟执行通过。你将收到约 ${num(out)} 股 ${stockName(stock)}，最多允许 ${p.slippage}% 滑点。` : `Dry run passed on Binance's Transaction API. You would receive about ${num(out)} ${stock.name} shares, with up to ${p.slippage}% slippage allowed.`, 'up');
+    button(t('Sell and keep the stock', '卖出并留下股票'), () => send(p.swapTx, 'swap'));
   } else {
-    say('Dry run failed: ' + (p.dryRun?.reason || p.dryRun?.status || 'no result') + '. Nothing was sent.', 'down');
-    button('Check again', check, true);
+    say(t('Dry run failed: ', '模拟执行失败：') + (p.dryRun?.reason || p.dryRun?.status || t('no result', '没有结果')) + t('. Nothing was sent.', '。没有发送任何交易。'), 'down');
+    button(t('Check again', '重新检查'), check, true);
   }
 }
 
@@ -324,62 +331,66 @@ async function connect() {
       await ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x38' }] });
     S.wallet = account;
     renderTrade();
-  } catch (e) { renderTrade('Could not connect: ' + (e.message || e), true); }
+  } catch (e) { renderTrade(t('Could not connect: ', '连接失败：') + (e.message || e), true); }
 }
 
 async function check() {
-  renderTrade('Preparing the trade and running it dry.');
+  renderTrade(t('Preparing the trade and running it dry.', '正在准备交易并模拟执行。'));
   try {
     S.plan = await postJson('/api/swap/prepare', { wallet: S.wallet, from: addr, to: S.d.stock.address, amount: S.quotes.amount, slippage: 3 + (S.sellTax || 0) * 100 });
     renderTrade();
-  } catch (e) { S.plan = null; renderTrade('Could not prepare the trade: ' + e.message, true); }
+  } catch (e) { S.plan = null; renderTrade(t('Could not prepare the trade: ', '无法准备交易：') + e.message, true); }
 }
 
 async function send(tx, what) {
   try {
     const hash = await ethereum.request({ method: 'eth_sendTransaction', params: [{ from: S.wallet, to: tx.to, data: tx.data, value: '0x' + BigInt(tx.value || '0').toString(16), gas: '0x' + Math.ceil(Number(tx.gas || 450000) * 1.3).toString(16) }] });
-    renderTrade(`Sent the ${what}. Waiting for BNB Chain to confirm it.`);
+    renderTrade(zh ? `${what === 'approval' ? '授权' : '兑换'}已发送，等待 BNB Chain 确认。` : `Sent the ${what}. Waiting for BNB Chain to confirm it.`);
     for (let i = 0; i < 40; i++) {
       await new Promise((r) => setTimeout(r, 3000));
       const receipt = await ethereum.request({ method: 'eth_getTransactionReceipt', params: [hash] });
       if (!receipt) continue;
-      if (receipt.status !== '0x1') { S.plan = null; return renderTrade(`The ${what} failed on-chain. Transaction ${short(hash)}.`, true); }
+      if (receipt.status !== '0x1') { S.plan = null; return renderTrade(zh ? `${what === 'approval' ? '授权' : '兑换'}在链上失败。交易 ${short(hash)}。` : `The ${what} failed on-chain. Transaction ${short(hash)}.`, true); }
       if (what === 'approval') return check();
       S.plan = null;
       const box = $('trade');
-      box.replaceChildren(el('p', 'note up', 'Done. The stock is in your wallet.'));
+      box.replaceChildren(el('p', 'note up', t('Done. The stock is in your wallet.', '完成。股票已到你的钱包。')));
       const p = el('p', 'note');
-      p.append(link('View the transaction on BscScan', 'https://bscscan.com/tx/' + hash));
+      p.append(link(t('View the transaction on BscScan', '在 BscScan 查看交易'), 'https://bscscan.com/tx/' + hash));
       box.append(p);
       return;
     }
-    renderTrade(`Still waiting on transaction ${short(hash)}. Check it on BscScan.`);
-  } catch (e) { renderTrade('Nothing was sent: ' + (e.message || e), true); }
+    renderTrade(zh ? `仍在等待交易 ${short(hash)}，可在 BscScan 查看。` : `Still waiting on transaction ${short(hash)}. Check it on BscScan.`);
+  } catch (e) { renderTrade(t('Nothing was sent: ', '没有发送任何交易：') + (e.message || e), true); }
 }
 
 function renderTape() {
   const tape = $('tape'), flow = $('flow'), { coin, stock, trades } = S.d;
-  if (!trades.length) { flow.textContent = 'No recent trades.'; tape.replaceChildren(); return; }
-  const through = trades.filter((t) => t.shares != null);
-  const inn = through.filter((t) => t.buy).reduce((a, t) => a + t.shares, 0), out = through.filter((t) => !t.buy).reduce((a, t) => a + t.shares, 0);
+  if (!trades.length) { flow.textContent = t('No recent trades.', '近期没有成交。'); tape.replaceChildren(); return; }
+  const through = trades.filter((x) => x.shares != null);
+  const inn = through.filter((x) => x.buy).reduce((a, x) => a + x.shares, 0), out = through.filter((x) => !x.buy).reduce((a, x) => a + x.shares, 0);
   const hours = Math.max(1, Math.round((Date.now() - trades[trades.length - 1].time) / 3600000));
-  flow.replaceChildren(`Last ${trades.length} trades, about ${hours} hours: `, el('b', 'up', num(inn) + ' shares in'), ' from buyers, ', el('b', 'down', num(out) + ' shares out'), ' to sellers.');
+  if (zh) flow.replaceChildren(`最近 ${trades.length} 笔成交（约 ${hours} 小时）：买家带来 `, el('b', 'up', num(inn) + ' 股流入'), '，卖家带走 ', el('b', 'down', num(out) + ' 股流出'), '。');
+  else flow.replaceChildren(`Last ${trades.length} trades, about ${hours} hours: `, el('b', 'up', num(inn) + ' shares in'), ' from buyers, ', el('b', 'down', num(out) + ' shares out'), ' to sellers.');
   const first = S.seen.size === 0;
   tape.replaceChildren();
-  for (const t of trades.slice(0, 10)) {
-    const li = el('li', !first && !S.seen.has(t.hash) ? 'new' : '');
+  for (const tr of trades.slice(0, 10)) {
+    const li = el('li', !first && !S.seen.has(tr.hash) ? 'new' : '');
     const mid = el('div');
     const act = el('span', 'act');
-    act.append(el('span', 'tag ' + (t.buy ? 'buy' : 'sell'), t.buy ? 'BUY' : 'SELL'), num(t.coins || 0) + ' ' + coin.symbol);
-    mid.append(act, el('span', 'd', t.shares != null ? num(t.shares) + ' ' + stock.name + ' shares ' + (t.buy ? 'into the pool' : 'out of the pool') : 'through the ' + (t.other || 'other') + ' pool'));
-    const right = link(usd(t.usd), 'https://bscscan.com/tx/' + t.hash);
-    li.append(el('span', 't', ago(t.time)), mid, right);
+    act.append(el('span', 'tag ' + (tr.buy ? 'buy' : 'sell'), tr.buy ? t('BUY', '买入') : t('SELL', '卖出')), num(tr.coins || 0) + ' ' + coin.symbol);
+    const detail = tr.shares != null
+      ? (zh ? num(tr.shares) + ' 股 ' + stockName(stock) + (tr.buy ? ' 流入池子' : ' 流出池子') : num(tr.shares) + ' ' + stock.name + ' shares ' + (tr.buy ? 'into the pool' : 'out of the pool'))
+      : (zh ? '经由 ' + (tr.other || '其他') + ' 池' : 'through the ' + (tr.other || 'other') + ' pool');
+    mid.append(act, el('span', 'd', detail));
+    const right = link(usd(tr.usd), 'https://bscscan.com/tx/' + tr.hash);
+    li.append(el('span', 't', ago(tr.time)), mid, right);
     tape.append(li);
   }
-  for (const t of trades) S.seen.add(t.hash);
+  for (const x of trades) S.seen.add(x.hash);
 }
 
-const stamp = () => { $('updated').textContent = 'Live · ' + new Date().toLocaleTimeString(); };
+const stamp = () => { $('updated').textContent = t('Live · ', '实时 · ') + new Date().toLocaleTimeString(); };
 const renderAll = () => { renderHead(); renderMove(); renderClock(); renderCompany(); renderTape(); stamp(); };
 
 async function init() {

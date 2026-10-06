@@ -21,7 +21,7 @@ export function toText(hex) {
 }
 
 // One JSON-RPC call, rotating through the nodes and retrying with a pause when one fails or throttles.
-export async function rpc(method, params, tries = 8) {
+export async function rpc(method, params, tries = 5) {
   let last;
   for (let i = 0; i < tries; i++) {
     const url = RPCS[turn++ % RPCS.length];
@@ -62,11 +62,20 @@ export async function multicallAll(calls, chunk = 500, parallel = 4) {
   const out = new Array(calls.length);
   const starts = [];
   for (let i = 0; i < calls.length; i += chunk) starts.push(i);
+  // A big request can fail on a weak connection where two smaller ones get through.
+  const run = async (list) => {
+    try { return await multicall(list); }
+    catch (err) {
+      if (list.length <= 50) throw err;
+      const half = Math.ceil(list.length / 2);
+      return [...await run(list.slice(0, half)), ...await run(list.slice(half))];
+    }
+  };
   let next = 0;
   await Promise.all(Array.from({ length: Math.min(parallel, starts.length) }, async () => {
     while (next < starts.length) {
       const s = starts[next++];
-      const part = await multicall(calls.slice(s, s + chunk));
+      const part = await run(calls.slice(s, s + chunk));
       for (let k = 0; k < part.length; k++) out[s + k] = part[k];
     }
   }));

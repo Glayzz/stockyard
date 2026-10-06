@@ -14,23 +14,24 @@
   <div class="top">
     <a class="brand" href="index.html">STOCKYARD <small>牛马</small></a>
     <nav class="nav">
-      <a href="index.html">League</a>
-      <a class="on" href="payslip.html">工资条 Payslip</a>
+      <a href="index.html" data-zh="排行榜">League</a>
+      <a class="on" href="payslip.html" data-zh="工资条">工资条 Payslip</a>
+      <button class="lang" id="lang" type="button">中文</button>
     </nav>
   </div>
 
   <section class="pay">
-    <span class="kicker">Stock memes pay their holders</span>
+    <span class="kicker" data-zh="股票 Meme 会给持有人发股票">Stock memes pay their holders</span>
     <h1><span>牛马工资条</span></h1>
-    <h2>Your memes are paying you in stock.</h2>
-    <p>Paste a wallet and print its payslip: every payout it has received in stock tokens, and the stock memes behind them.</p>
+    <h2 data-zh="你的 Meme 正在用股票给你发工资。">Your memes are paying you in stock.</h2>
+    <p data-zh="粘贴一个钱包地址，打印它的工资条：它收到的每一笔股票代币分红，以及背后的股票 Meme。">Paste a wallet and print its payslip: every payout it has received in stock tokens, and the stock memes behind them.</p>
     <form class="lookup" id="form">
-      <input id="wallet" placeholder="0x… wallet address" autocomplete="off" spellcheck="false" aria-label="Wallet address">
-      <button class="btn" type="submit">Print payslip</button>
+      <input id="wallet" placeholder="0x… wallet address" data-zh-placeholder="0x… 钱包地址" autocomplete="off" spellcheck="false" aria-label="Wallet address">
+      <button class="btn" type="submit" data-zh="打印工资条">Print payslip</button>
     </form>
-    <div class="tries">Try one:
-      <button type="button" data-w="0x28816c4c4792467390c90e5b426f198570e29307">NIUMA's largest holder</button>
-      <button type="button" data-w="0xe1B0e19F8e014e760BFa6F81769Fd3587CF9d767">NIUMA treasury</button>
+    <div class="tries"><span data-zh="试一个：">Try one:</span>
+      <button type="button" data-w="0x28816c4c4792467390c90e5b426f198570e29307" data-zh="NIUMA 最大持有人">NIUMA's largest holder</button>
+      <button type="button" data-w="0xe1B0e19F8e014e760BFa6F81769Fd3587CF9d767" data-zh="NIUMA 金库">NIUMA treasury</button>
     </div>
     <div class="err" id="err" role="alert"></div>
   </section>
@@ -39,21 +40,22 @@
     <div class="slot"><span class="dot"></span><span id="slot-text">READY</span></div>
     <div class="feed" id="feed"><canvas id="slip" width="1094" height="1142" role="img"></canvas></div>
     <div class="actions">
-      <button class="btn" id="save" type="button">Save image</button>
-      <button class="btn plain" id="share" type="button">Share on X</button>
-      <button class="btn plain" id="copy" type="button">Copy link</button>
+      <button class="btn" id="save" type="button" data-zh="保存图片">Save image</button>
+      <button class="btn plain" id="share" type="button" data-zh="分享到 X">Share on X</button>
+      <button class="btn plain" id="copy" type="button" data-zh="复制链接">Copy link</button>
     </div>
     <p class="sr" id="summary"></p>
   </div>
-  <p class="note" style="margin: 30px auto 0; text-align: center;">Balances and payout history come from the Binance Web3 Wallet API; the coins a wallet holds are read from BNB Chain. A payout is stock sent to the wallet by a coin's own distribution call. Stock you bought yourself shows in the balance but is not counted as pay.</p>
+  <p class="note" style="margin: 30px auto 0; text-align: center;" data-zh="余额和分红记录来自币安 Web3 钱包 API；钱包持有哪些币读自 BNB Chain。“分红”指某个币通过自身的分发调用打到钱包里的股票。你自己买的股票会计入余额，但不算工资。">Balances and payout history come from the Binance Web3 Wallet API; the coins a wallet holds are read from BNB Chain. A payout is stock sent to the wallet by a coin's own distribution call. Stock you bought yourself shows in the balance but is not counted as pay.</p>
 </div>
 
 <script src="shared.js"></script>
 <script>
+initLang();
 const P = { data: null };
 
-const grade = (total) => total <= 0 ? '试用期 · On probation' : total < 1 ? '实习牛马 · Intern' : total < 10 ? '初级牛马 · Junior' : total < 100 ? '高级牛马 · Senior' : total < 1000 ? '主管 · Manager' : '股东 · Shareholder';
-const day = (ms, year) => new Date(ms).toLocaleDateString('en-GB', year ? { day: 'numeric', month: 'short', year: 'numeric' } : { day: 'numeric', month: 'short' });
+const grade = (total) => { const g = total <= 0 ? ['试用期', 'On probation'] : total < 1 ? ['实习牛马', 'Intern'] : total < 10 ? ['初级牛马', 'Junior'] : total < 100 ? ['高级牛马', 'Senior'] : total < 1000 ? ['主管', 'Manager'] : ['股东', 'Shareholder']; return zh ? g[0] : g[0] + ' · ' + g[1]; };
+const day = (ms, year) => new Date(ms).toLocaleDateString(dateLocale, year ? { day: 'numeric', month: 'short', year: 'numeric' } : { day: 'numeric', month: 'short' });
 
 async function lookup(wallet) {
   const r = await fetch('/api/payslip?w=' + wallet);
@@ -73,8 +75,8 @@ function drawSlip(d) {
   const mono = (w, s) => `${w} ${s}px "JetBrains Mono", "Noto Sans SC", monospace`;
   const body = (w, s) => `${w} ${s}px "Space Grotesk", "Noto Sans SC", sans-serif`;
   const disp = (s) => `400 ${s}px "Archivo Black", "Noto Sans SC", sans-serif`;
-  const text = (t, x, y, font, color = INK, align = 'left') => { g.font = font; g.fillStyle = color; g.textAlign = align; g.fillText(t, x, y); };
-  const fit = (t, font, max) => { g.font = font; if (g.measureText(t).width <= max) return t; while (t.length > 1 && g.measureText(t + '…').width > max) t = t.slice(0, -1); return t + '…'; };
+  const text = (str, x, y, font, color = INK, align = 'left') => { g.font = font; g.fillStyle = color; g.textAlign = align; g.fillText(str, x, y); };
+  const fit = (str, font, max) => { g.font = font; if (g.measureText(str).width <= max) return str; while (str.length > 1 && g.measureText(str + '…').width > max) str = str.slice(0, -1); return str + '…'; };
   const dash = (y) => { g.save(); g.setLineDash([14, 10]); g.lineWidth = 3; g.strokeStyle = INK; g.beginPath(); g.moveTo(56, y); g.lineTo(W - 56, y); g.stroke(); g.restore(); };
 
   // paper with a torn bottom edge, sitting on a hard ink shadow
@@ -94,15 +96,15 @@ function drawSlip(d) {
 
   text('牛马工资条', 56, 128, '900 96px "Noto Sans SC", sans-serif');
   text('PAYSLIP', W - 56, 98, disp(52), INK, 'right');
-  text('PAID IN STOCK', W - 56, 142, mono(700, 24), INK, 'right');
+  text(t('PAID IN STOCK', '以股票发薪'), W - 56, 142, mono(700, 24), INK, 'right');
 
   let y = 268;
   const names = d.employers.map((e) => e.coin);
   const meta = [
-    ['EMPLOYEE', d.wallet.slice(0, 10) + '…' + d.wallet.slice(-8)],
-    ['PAY PERIOD', d.paid ? day(d.paid.since, true) + ' to ' + day(Date.now(), true) : day(Date.now(), true)],
-    ['EMPLOYERS', names.length ? names.slice(0, 3).join(', ') + (d.employerCount > 3 ? ' +' + (d.employerCount - 3) : '') : 'none yet'],
-    ['GRADE', grade(d.paid ? d.paid.usd : d.total)],
+    [t('EMPLOYEE', '员工'), d.wallet.slice(0, 10) + '…' + d.wallet.slice(-8)],
+    [t('PAY PERIOD', '发薪周期'), d.paid ? day(d.paid.since, true) + t(' to ', ' 至 ') + day(Date.now(), true) : day(Date.now(), true)],
+    [t('EMPLOYERS', '雇主'), names.length ? names.slice(0, 3).join(', ') + (d.employerCount > 3 ? ' +' + (d.employerCount - 3) : '') : t('none yet', '暂无')],
+    [t('GRADE', '职级'), grade(d.paid ? d.paid.usd : d.total)],
   ];
   for (const [k, v] of meta) {
     text(k, 56, y, mono(500, 26), MUT);
@@ -111,20 +113,20 @@ function drawSlip(d) {
   }
   dash(y - 18);
   y += 36;
-  text('STOCK', 56, y, mono(500, 24), MUT);
-  text('SHARES', 740, y, mono(500, 24), MUT, 'right');
-  text('VALUE', W - 56, y, mono(500, 24), MUT, 'right');
+  text(t('STOCK', '股票'), 56, y, mono(500, 24), MUT);
+  text(t('SHARES', '股数'), 740, y, mono(500, 24), MUT, 'right');
+  text(t('VALUE', '价值'), W - 56, y, mono(500, 24), MUT, 'right');
   y += 26;
   if (!shown.length) {
-    text('No stock in this wallet yet', 56, y + 58, body(700, 42));
-    text('Hold a stock meme like 牛马 NIUMA to get paid in stock', 56, y + 100, mono(500, 24), MUT);
+    text(t('No stock in this wallet yet', '这个钱包还没有股票'), 56, y + 58, body(700, 42));
+    text(t('Hold a stock meme like 牛马 NIUMA to get paid in stock', '持有牛马 NIUMA 这样的股票 Meme，就能领到股票'), 56, y + 100, mono(500, 24), MUT);
     y += rowH;
   }
   for (const l of shown) {
-    const coin = l.via.length ? 'via ' + l.via.map((v) => v.coin).join(', ') : null;
-    const paid = l.paid ? `${l.paid.count}${l.paid.more ? '+' : ''} payouts since ${day(l.paid.first)}` : null;
-    text(l.name, 56, y + 56, body(700, 46));
-    text(fit([paid, coin].filter(Boolean).join(' · ') || 'held directly, no payouts found', mono(500, 24), 540), 56, y + 98, mono(500, 24), paid ? GREEN : MUT);
+    const coin = l.via.length ? t('via ', '来自 ') + l.via.map((v) => v.coin).join(', ') : null;
+    const paid = l.paid ? (zh ? `自 ${day(l.paid.first)} 起发放 ${l.paid.count}${l.paid.more ? '+' : ''} 次` : `${l.paid.count}${l.paid.more ? '+' : ''} payouts since ${day(l.paid.first)}`) : null;
+    text(stockName(l), 56, y + 56, body(700, 46));
+    text(fit([paid, coin].filter(Boolean).join(' · ') || t('held directly, no payouts found', '直接持有，未发现分红'), mono(500, 24), 540), 56, y + 98, mono(500, 24), paid ? GREEN : MUT);
     text(num(l.shares), 740, y + 62, mono(700, 36), INK, 'right');
     text(usd(l.value), W - 56, y + 62, mono(700, 36), INK, 'right');
     y += rowH;
@@ -132,11 +134,11 @@ function drawSlip(d) {
   if (recent.length) {
     dash(y + 10);
     y += 58;
-    text('LATEST PAYOUTS', 56, y, mono(500, 24), MUT);
+    text(t('LATEST PAYOUTS', '最近发放'), 56, y, mono(500, 24), MUT);
     for (const p of recent) {
       y += 48;
       text(day(p.time), 56, y, mono(700, 28));
-      text(fit(p.name, mono(500, 28), 330), 220, y, mono(500, 28));
+      text(fit(stockName(p), mono(500, 28), 330), 220, y, mono(500, 28));
       text('+' + num(p.shares), 740, y, mono(700, 28), GREEN, 'right');
       text(usd(p.value), W - 56, y, mono(500, 28), INK, 'right');
     }
@@ -144,11 +146,11 @@ function drawSlip(d) {
   }
   dash(y + 10);
   y += 70;
-  text(d.paid ? (d.paid.atLeast ? 'PAID TO DATE · AT LEAST' : 'PAID TO DATE') + ` · ${d.paid.count} PAYOUTS` : 'STOCK IN THIS WALLET', 56, y, mono(700, 26), MUT);
+  text(d.paid ? (zh ? (d.paid.atLeast ? '累计已发（至少）' : '累计已发') + ` · ${d.paid.count} 次` : (d.paid.atLeast ? 'PAID TO DATE · AT LEAST' : 'PAID TO DATE') + ` · ${d.paid.count} PAYOUTS`) : t('STOCK IN THIS WALLET', '钱包内股票'), 56, y, mono(700, 26), MUT);
   y += 100;
   text(usd(d.paid ? d.paid.usd : d.total), 56, y, disp(104));
   const sealY = y - 40;
-  if (d.paid) { y += 46; text(`holding ${usd(d.total)} of stock today` + (d.lines.length > shown.length ? ` in ${d.lines.length} stocks` : ''), 56, y, mono(500, 24), MUT); }
+  if (d.paid) { y += 46; text(zh ? `今天持有 ${usd(d.total)} 的股票` + (d.lines.length > shown.length ? `，共 ${d.lines.length} 只` : '') : `holding ${usd(d.total)} of stock today` + (d.lines.length > shown.length ? ` in ${d.lines.length} stocks` : ''), 56, y, mono(500, 24), MUT); }
 
   // red company seal
   g.save();
@@ -165,7 +167,7 @@ function drawSlip(d) {
   const by = y + 70;
   g.fillStyle = INK;
   [...d.wallet.slice(2)].forEach((ch, i) => { const w = 3 + (parseInt(ch, 16) % 4) * 2; if (i % 2 === 0) g.fillRect(bx, by, w, 70); bx += w + 3; });
-  text('stockyard · payouts from the Binance Web3 Wallet API', 56, by + 110, mono(500, 22), MUT);
+  text(t('stockyard · payouts from the Binance Web3 Wallet API', 'stockyard · 分红记录来自币安 Web3 钱包 API'), 56, by + 110, mono(500, 22), MUT);
 
   c.setAttribute('aria-label', 'Payslip for wallet ' + short(d.wallet));
   $('summary').textContent = `Payslip for ${d.wallet}. ` + (d.lines.length
@@ -177,11 +179,11 @@ async function print(wallet) {
   const err = $('err');
   err.textContent = '';
   wallet = wallet.trim();
-  if (!/^0x[0-9a-fA-F]{40}$/.test(wallet)) { err.textContent = 'Enter a wallet address: 0x followed by 40 characters.'; return; }
+  if (!/^0x[0-9a-fA-F]{40}$/.test(wallet)) { err.textContent = t('Enter a wallet address: 0x followed by 40 characters.', '请输入钱包地址：0x 加 40 位字符。'); return; }
   $('wallet').value = wallet;
   $('printer').hidden = false;
   $('feed').classList.remove('print');
-  $('slot-text').textContent = 'PRINTING';
+  $('slot-text').textContent = t('PRINTING', '打印中');
   try {
     const fonts = ['900 96px "Noto Sans SC"', '400 52px "Archivo Black"', '700 36px "JetBrains Mono"', '500 24px "JetBrains Mono"', '700 46px "Space Grotesk"'];
     const [data] = await Promise.all([lookup(wallet), ...fonts.map((f) => document.fonts.load(f, '牛马工资条已待发薪试用期实习初高级主管股东Aa0').catch(() => {}))]);
@@ -190,11 +192,11 @@ async function print(wallet) {
     history.replaceState(null, '', '?w=' + wallet);
     void $('feed').offsetWidth;
     $('feed').classList.add('print');
-    $('slot-text').textContent = data.paid ? 'PAID' : data.total > 0 ? 'NO PAYOUTS FOUND' : 'NOTHING TO PAY';
-    if (!data.history) err.textContent = 'Payout history is unavailable right now, so this slip shows balances only.';
+    $('slot-text').textContent = data.paid ? t('PAID', '已发薪') : data.total > 0 ? t('NO PAYOUTS FOUND', '未发现分红') : t('NOTHING TO PAY', '暂无可发');
+    if (!data.history) err.textContent = t('Payout history is unavailable right now, so this slip shows balances only.', '暂时拿不到分红记录，这张工资条只显示余额。');
   } catch (e) {
     $('printer').hidden = true;
-    err.textContent = 'Could not print this payslip: ' + e.message + '. Try again in a moment.';
+    err.textContent = t('Could not print this payslip: ', '无法打印这张工资条：') + e.message + t('. Try again in a moment.', '。请稍后再试。');
   }
 }
 
@@ -209,13 +211,13 @@ $('save').onclick = () => $('slip').toBlob((blob) => {
 });
 $('share').onclick = () => {
   const d = P.data;
-  const text = d.paid ? `My memes have paid me ${usd(d.paid.usd)} in real stock across ${d.paid.count} payouts. 牛马工资条`
-    : d.lines.length ? `My wallet holds ${usd(d.total)} of tokenized stock. 牛马工资条` : 'Waiting on my first stock payslip. 牛马工资条';
-  window.open('https://x.com/intent/post?text=' + encodeURIComponent(text) + '&url=' + encodeURIComponent(location.href), '_blank', 'noopener');
+  const post = d.paid ? (zh ? `我的 Meme 已经分 ${d.paid.count} 次给我发了 ${usd(d.paid.usd)} 的真实股票。牛马工资条` : `My memes have paid me ${usd(d.paid.usd)} in real stock across ${d.paid.count} payouts. 牛马工资条`)
+    : d.lines.length ? (zh ? `我的钱包里有 ${usd(d.total)} 的代币化股票。牛马工资条` : `My wallet holds ${usd(d.total)} of tokenized stock. 牛马工资条`) : t('Waiting on my first stock payslip. 牛马工资条', '等我的第一张股票工资条。牛马工资条');
+  window.open('https://x.com/intent/post?text=' + encodeURIComponent(post) + '&url=' + encodeURIComponent(location.href), '_blank', 'noopener');
 };
 $('copy').onclick = async () => {
-  try { await navigator.clipboard.writeText(location.href); $('copy').textContent = 'Link copied'; } catch { $('copy').textContent = 'Copy failed'; }
-  setTimeout(() => { $('copy').textContent = 'Copy link'; }, 1800);
+  try { await navigator.clipboard.writeText(location.href); $('copy').textContent = t('Link copied', '链接已复制'); } catch { $('copy').textContent = t('Copy failed', '复制失败'); }
+  setTimeout(() => { $('copy').textContent = t('Copy link', '复制链接'); }, 1800);
 };
 
 const start = new URLSearchParams(location.search).get('w');

@@ -11,23 +11,13 @@ const HISTORY_LINES = 6, HISTORY_PAGES = 2;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const cache = new Map();
 
+// What the wallet holds of every stock token, in one on-chain read. With 534 stock tokens the
+// Wallet API's 20-per-call balance endpoint would take 27 calls, so it is kept for payout history.
 async function stockBalances(wallet, lg) {
+  const bal = await multicallAll(stocks.map((s) => [s.address, '70a08231' + addrWord(wallet)]));
   const held = {};
-  try {
-    for (let i = 0; i < stocks.length; i += 20) {
-      const data = await bw3('/api/v1/dex/balance/token-balances-by-address', {
-        method: 'POST',
-        body: { address: wallet, tokenContractAddresses: stocks.slice(i, i + 20).map((s) => ({ binanceChainId: '56', tokenContractAddress: s.address })) },
-      });
-      for (const a of data?.[0]?.tokenAssets || []) held[a.tokenContractAddress.toLowerCase()] = { balance: Number(a.balance), price: Number(a.tokenPrice) };
-      await sleep(220);
-    }
-    return { held, source: 'Binance Wallet API' };
-  } catch {
-    const bal = await multicallAll(stocks.map((s) => [s.address, '70a08231' + addrWord(wallet)]));
-    stocks.forEach((s, i) => { held[s.address] = { balance: bal[i] ? toNum(bal[i]) : 0, price: lg.stocks[s.symbol]?.price || 0 }; });
-    return { held, source: 'BNB Chain' };
-  }
+  stocks.forEach((s, i) => { held[s.address] = { balance: bal[i] ? toNum(bal[i]) : 0, price: lg.stocks[s.symbol]?.price || 0 }; });
+  return { held, source: 'BNB Chain' };
 }
 
 // Incoming payouts of one stock token, newest first, up to HISTORY_PAGES pages of 100.
@@ -85,7 +75,7 @@ export async function payslip(input) {
           shares: list.reduce((a, p) => a + p.shares, 0), count: list.length, first: list[list.length - 1].time, last: list[0].time,
           payers: [...new Set(list.map((p) => p.payer))].length, more,
         };
-        recent.push(...list.slice(0, 6).map((p) => ({ ...p, sym: line.sym, name: line.name, value: p.shares * line.price })));
+        recent.push(...list.slice(0, 6).map((p) => ({ ...p, sym: line.sym, name: line.name, nameZh: line.nameZh, value: p.shares * line.price })));
       }
       await sleep(220);
     } catch { history = false; break; }
