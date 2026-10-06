@@ -1,1 +1,10 @@
 - 2026-10-06T17:31:18.874Z call OK /api/v1/dex/market/rwa/platforms in 1224 ms
+- 2026-10-06 Docs: web3.binance.com, developers.binance.com and www.binance.com reset the connection on a Nigerian home connection (curl error 35, later NXDOMAIN from the ISP resolver). Nigeria is not on the prohibited-regions list, so an eligible builder cannot open the docs or the portal without a VPN.
+- 2026-10-06 Docs: with a working connection, curl and fetch get HTTP 202 with an empty body from every dev-docs page, including llms.txt and llms-full.txt. They only load in a real browser, so "feed the docs to your agent" needs a browser session.
+- 2026-10-06 Docs: llms-full.txt (451k characters) has the guides but not the per-endpoint parameter tables, so parameters had to be found by trial calls.
+- 2026-10-06 Portal: key created in Project 1 with Trade, Transaction, Wallet, Market and DeFi ticked. B402 Payments could not be ticked; it needs a separate application first, and a key cannot gain the permission afterwards.
+- 2026-10-06 Auth: signing worked first time following the Authentication page. The /build prefix warning there is what made it work.
+- 2026-10-06 First nine calls all passed: rwa/tokens 910 ms, rwa/price 444 ms, token/top-liquidity 562 and 766 ms, market/trades 1189 ms, aggregator/quote 443 and 1050 ms, balance/token-balances-by-address 461 ms, token/holder 652 ms.
+- 2026-10-06 Trading: aggregator/quote routes a Flap stock meme (NIUMA) into its quote stock (SPYB) in one hop through LiquidMesh, and into USDT through SPYB in two hops. priceImpactPercent came back as 0.0042 for a 0.42% impact, so it is a fraction despite the name.
+- 2026-10-06 Market: token/top-liquidity returns 15 pools for SPYB. PancakeSwap v2 has far more pools quoted in SPYB than that, so finding every stock-paired pool needed an on-chain scan of the factory's pair list. liquidityUsd and tokenAmount are null for some pools.
+- 2026-10-06 RWA: rwa/tokens with platformId=bstock returned 46 items while rwa/platforms reports 87 bStock tickers on BSC; not yet clear whether that is paging or a filter.
