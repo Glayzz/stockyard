@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stockyard · Stock memes on BNB Chain</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=JetBrains+Mono:wght@500;700&family=Noto+Sans+SC:wght@500;900&family=Space+Grotesk:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <a class="brand" href="index.html">STOCKYARD <small>牛马</small></a>
+    <nav class="nav">
+      <span class="live"><span class="dot"></span><span id="updated">Loading live data</span></span>
+      <a class="on" href="index.html">League</a>
+      <a class="cta" href="payslip.html">工资条 Payslip</a>
+    </nav>
+  </div>
+
+  <section class="hero">
+    <div>
+      <span class="kicker">Live on BNB Chain</span>
+      <h1>Meme coins are sitting on</h1>
+      <div class="big" id="total">$—</div>
+      <h1>of real US stock.</h1>
+      <p class="sub" id="sub">Counting the stock tokens sitting in meme coin pools.</p>
+    </div>
+    <a class="teaser" href="payslip.html">
+      <div class="cn">牛马工资条</div>
+      <div class="en">PAYSLIP · PAID IN STOCK</div>
+      <div class="row"><span>Employer</span><b>牛马 NIUMA</b></div>
+      <div class="row"><span>Paid in</span><b>S&amp;P 500 shares</b></div>
+      <div class="row"><span>Employee</span><b>you?</b></div>
+      <span class="go">Print my payslip →</span>
+      <span class="seal"><span>已发薪<small>PAID IN STOCK</small></span></span>
+    </a>
+  </section>
+
+  <div class="ticker" aria-hidden="true"><div class="track" id="ticker"></div></div>
+
+  <a class="niuma" id="niuma" hidden></a>
+
+  <h2 class="sec">Stock held by meme pools</h2>
+  <div class="tiles" id="tiles"></div>
+
+  <div class="bar">
+    <h2 class="sec" id="league-title">The stock league</h2>
+    <div class="seg" id="sort">
+      <button data-k="stockUsd" class="on">Stock held</button>
+      <button data-k="mcap">Market cap</button>
+      <button data-k="vol24">24h volume</button>
+    </div>
+  </div>
+  <div class="tablewrap">
+    <table class="league">
+      <thead><tr><th>#</th><th>Coin</th><th>Trades against</th><th>Stock in its pool</th><th>Market cap</th><th>24h volume</th></tr></thead>
+      <tbody id="rows"><tr><td colspan="6" class="state">Loading pools</td></tr></tbody>
+    </table>
+  </div>
+  <p class="note">Live from DexScreener, refreshed every minute. Each stock token returns its 30 largest pools, so the totals are a floor. A coin is listed when its pool holds at least $1,000 of stock and that stock is at least 0.2% of its market cap. Pool liquidity belongs to liquidity providers; it does not back the coin's price.</p>
+</div>
+
+<script src="shared.js"></script>
+<script>
+const state = { rows: [], stock: 'ALL', sort: 'stockUsd' };
+
+async function load() {
+  const { rows, failed } = await loadLeague();
+  state.rows = rows;
+  $('updated').textContent = 'Live · ' + new Date().toLocaleTimeString() + (failed ? ' · ' + failed + ' stocks failed' : '');
+  render();
+}
+
+function render() {
+  const all = state.rows;
+  const sum = (list, k) => list.reduce((a, m) => a + m[k], 0);
+  $('total').textContent = usd(sum(all, 'stockUsd'));
+  $('sub').replaceChildren(
+    el('b', null, all.length + ' meme coins'), ' trade against stock tokens instead of BNB. Together they are worth ',
+    el('b', null, usd(sum(all, 'mcap'))), ' and traded ', el('b', null, usd(sum(all, 'vol24'))), ' in the last 24 hours.');
+
+  const track = $('ticker');
+  const items = all.slice().sort((a, b) => b.stockUsd - a.stockUsd).slice(0, 14)
+    .map((m) => { const s = el('span'); s.append(el('b', null, m.coin), ' holds ' + num(m.shares) + ' ' + m.name + ' shares'); return s; });
+  track.replaceChildren(...items, ...items.map((n) => n.cloneNode(true)));
+
+  const by = {};
+  for (const m of all) { const b = by[m.sym] ??= { sym: m.sym, name: m.name, n: 0, shares: 0, stockUsd: 0 }; b.n++; b.shares += m.shares; b.stockUsd += m.stockUsd; }
+  const tiles = $('tiles');
+  tiles.replaceChildren();
+  const tile = (key, title, value, meta) => {
+    const t = el('button', 'tile' + (state.stock === key ? ' on' : ''));
+    t.append(el('div', 's', title), el('div', 'v', value), el('div', 'm', meta));
+    t.onclick = () => { state.stock = key; render(); };
+    return t;
+  };
+  tiles.append(tile('ALL', 'All stocks', usd(sum(all, 'stockUsd')), all.length + ' coins'));
+  for (const b of Object.values(by).sort((x, y) => y.stockUsd - x.stockUsd))
+    tiles.append(tile(b.sym, b.name, usd(b.stockUsd), num(b.shares) + ' shares · ' + b.n + ' coins'));
+
+  const list = (state.stock === 'ALL' ? all : all.filter((m) => m.sym === state.stock)).slice().sort((a, b) => b[state.sort] - a[state.sort]);
+  $('league-title').textContent = state.stock === 'ALL' ? 'The stock league' : 'The ' + STOCKS[state.stock][1] + ' league';
+  const body = $('rows');
+  body.replaceChildren();
+  list.slice(0, 60).forEach((m, i) => {
+    const tr = el('tr', m.address === NIUMA ? 'me' : '');
+    const coin = el('td');
+    const who = el('div', 'who');
+    const names = el('div');
+    names.append(el('span', 'coin', m.coin), el('span', 'addr', short(m.address)));
+    who.append(avatar(m.logo, m.coin), names);
+    coin.append(who);
+    const stock = el('td');
+    stock.append(el('span', 'pill', m.name));
+    const held = el('td', null, usd(m.stockUsd));
+    held.append(el('span', 'shares', num(m.shares) + ' shares'));
+    tr.append(el('td', null, String(i + 1)), coin, stock, held, el('td', null, usd(m.mcap)), el('td', null, usd(m.vol24)));
+    tr.onclick = () => { location.href = 'coin.html?a=' + m.address; };
+    body.append(tr);
+  });
+  renderNiuma(all);
+}
+
+function renderNiuma(all) {
+  const box = $('niuma');
+  const me = all.find((m) => m.address === NIUMA);
+  if (!me) { box.hidden = true; return; }
+  const peers = all.filter((m) => m.sym === me.sym);
+  const rankBy = (list, k) => list.slice().sort((a, b) => b[k] - a[k]).findIndex((m) => m.address === NIUMA) + 1;
+  const byHeld = peers.slice().sort((a, b) => b.shares - a.shares);
+  const pos = byHeld.findIndex((m) => m.address === NIUMA);
+  const left = el('div');
+  const p = el('p');
+  if (pos > 0) {
+    const ahead = byHeld[pos - 1];
+    p.append('Only ', el('b', null, (ahead.shares - me.shares).toFixed(3) + ' shares'), ' behind ' + ahead.coin + ' for the top spot in the ' + me.name + ' league.');
+  } else {
+    p.append('The largest ' + me.name + ' holder of any meme community on BNB Chain.');
+  }
+  left.append(el('h2', null, '牛马 NIUMA holds ' + num(me.shares) + ' shares of the ' + me.name), p);
+  const ranks = el('div', 'ranks');
+  const rank = (n, t) => { const r = el('div', 'rank'); r.append(el('div', 'n', '#' + n), el('div', 't', t)); return r; };
+  ranks.append(
+    rank(rankBy(peers, 'mcap'), me.name + ' by size'),
+    rank(pos + 1, me.name + ' by stock'),
+    rank(rankBy(all, 'stockUsd'), 'of ' + all.length + ' coins'));
+  box.replaceChildren(avatar(me.logo, me.coin), left, ranks);
+  box.href = 'coin.html?a=' + NIUMA;
+  box.hidden = false;
+}
+
+$('sort').onclick = (e) => {
+  const k = e.target.dataset.k;
+  if (!k) return;
+  state.sort = k;
+  for (const b of $('sort').children) b.classList.toggle('on', b.dataset.k === k);
+  render();
+};
+
+const refresh = () => load().catch((err) => {
+  $('updated').textContent = 'Could not load live data: ' + err.message;
+  if (!state.rows.length) {
+    const td = el('td', 'state', 'Could not reach DexScreener. Retrying in a minute.');
+    td.colSpan = 6;
+    const tr = el('tr');
+    tr.append(td);
+    $('rows').replaceChildren(tr);
+  }
+});
+refresh();
+setInterval(refresh, 60000);
+</script>
+</body>
+</html>

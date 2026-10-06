@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stockyard · Coin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=JetBrains+Mono:wght@500;700&family=Noto+Sans+SC:wght@500;900&family=Space+Grotesk:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <a class="brand" href="index.html">STOCKYARD <small>牛马</small></a>
+    <nav class="nav">
+      <span class="live"><span class="dot"></span><span id="updated">Loading live data</span></span>
+      <a href="index.html">League</a>
+      <a class="cta" href="payslip.html">工资条 Payslip</a>
+    </nav>
+  </div>
+  <a class="back" href="index.html">← All stock memes</a>
+
+  <div id="page" hidden>
+    <div class="title" id="title"></div>
+    <div class="meta" id="meta"></div>
+    <div class="stats" id="stats"></div>
+
+    <div class="bar">
+      <h2 class="sec">What moved the price</h2>
+      <div class="seg" id="win">
+        <button data-h="24" class="on">24 hours</button>
+        <button data-h="72">3 days</button>
+        <button data-h="168">7 days</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="split" id="split"></div>
+      <p class="story" id="story"></p>
+      <div class="chart" id="chart" hidden></div>
+      <div class="legend" id="legend"></div>
+      <div class="clock" id="clock"></div>
+    </div>
+
+    <div class="two">
+      <div>
+        <h2 class="sec">Sell and keep the stock</h2>
+        <div class="card sell">
+          <label for="amount" id="amount-label">Amount to sell</label>
+          <input id="amount" inputmode="decimal" value="100000" autocomplete="off">
+          <div class="opts" id="opts"></div>
+          <p class="note" id="sell-note"></p>
+        </div>
+      </div>
+      <div>
+        <h2 class="sec">Stock moving through the pool</h2>
+        <div class="card">
+          <p class="note" id="flow" style="margin-top:0"></p>
+          <ul class="tape" id="tape"></ul>
+        </div>
+      </div>
+    </div>
+
+    <h2 class="sec">Where this coin trades</h2>
+    <div class="tablewrap">
+      <table class="pools">
+        <thead><tr><th>Trades against</th><th>Liquidity</th><th>Share of liquidity</th></tr></thead>
+        <tbody id="pools"></tbody>
+      </table>
+    </div>
+    <p class="note">Prices and pools from DexScreener, hourly history and trades from GeckoTerminal, tax and holders from GoPlus. Sell figures are estimates from live pool reserves, not quotes. US market hours ignore public holidays.</p>
+  </div>
+  <div class="state" id="state">Loading coin</div>
+</div>
+
+<script src="shared.js"></script>
+<script>
+const addr = (new URLSearchParams(location.search).get('a') || NIUMA).toLowerCase();
+const GT = 'https://api.geckoterminal.com/api/v2/networks/bsc/pools/';
+const POOL_FEE = 0.0025;
+const S = { hours: 24, seen: new Set() };
+
+const fail = (msg) => { $('page').hidden = true; $('state').hidden = false; $('state').textContent = msg; };
+
+async function loadPools() {
+  const pairs = ((await getJson(DEX + addr)).pairs || []).filter((p) => p.chainId === 'bsc');
+  const pools = pairs.map((p) => {
+    const coinIsBase = p.baseToken.address.toLowerCase() === addr;
+    const other = coinIsBase ? p.quoteToken : p.baseToken;
+    return {
+      p, coinIsBase, other, otherAddr: other.address.toLowerCase(), liq: p.liquidity?.usd || 0,
+      coinRes: (coinIsBase ? p.liquidity?.base : p.liquidity?.quote) || 0,
+      otherRes: (coinIsBase ? p.liquidity?.quote : p.liquidity?.base) || 0,
+    };
+  }).sort((a, b) => b.liq - a.liq);
+  const main = pools.find((x) => STOCK_BY_ADDR[x.otherAddr]);
+  if (!main) throw new Error('This coin has no pool against a stock token.');
+  const stock = { addr: main.otherAddr, ...STOCK_BY_ADDR[main.otherAddr] };
+  const stockPairs = ((await getJson(DEX + stock.addr)).pairs || [])
+    .filter((p) => p.baseToken.address.toLowerCase() === stock.addr && p.quoteToken.symbol === 'USDT').sort(byLiq);
+  stock.price = stockPairs[0] ? Number(stockPairs[0].priceUsd) : 0;
+  const day = (p) => p?.priceChange?.h24 == null ? null : p.priceChange.h24 / 100;
+  S.dayChange = { coin: day(main.p), stock: day(stockPairs[0]) };
+  const coin = main.coinIsBase ? main.p.baseToken : main.p.quoteToken;
+  Object.assign(S, {
+    pools, main, stock, symbol: coin.symbol, logo: main.p.info?.imageUrl || null,
+    price: main.coinIsBase ? Number(main.p.priceUsd) : stock.price * main.otherRes / main.coinRes,
+    mcap: main.p.marketCap || main.p.fdv || 0,
+    vol24: pools.reduce((a, x) => a + (x.p.volume?.h24 || 0), 0),
+  });
+}
+
+async function loadSafety() {
+  try {
+    const t = Object.values((await getJson('https://api.gopluslabs.io/api/v1/token_security/56?contract_addresses=' + addr)).result || {})[0];
+    if (!t) return;
+    S.buyTax = t.buy_tax === '' ? null : Number(t.buy_tax);
+    S.sellTax = t.sell_tax === '' ? null : Number(t.sell_tax);
+    S.holders = Number(t.holder_count) || null;
+  } catch {}
+}
+
+// GeckoTerminal's free tier rate-limits bursts, so pool calls retry with a growing pause.
+async function gt(path, tries = 3) {
+  for (let i = 0; ; i++) {
+    try { return await getJson(GT + S.main.p.pairAddress + path); }
+    catch (err) { if (i >= tries - 1) throw err; await new Promise((r) => setTimeout(r, 2500 * (i + 1))); }
+  }
+}
+
+async function loadHistory() {
+  const series = async (token) => (await gt(`/ohlcv/hour?aggregate=1&limit=200&currency=usd&token=${token}`))
+    .data.attributes.ohlcv_list.map((c) => [c[0], c[4]]).reverse();
+  try { S.coinSeries = await series(addr); S.stockSeries = await series(S.stock.addr); } catch { S.coinSeries = S.stockSeries = null; }
+}
+
+async function loadTrades() {
+  try {
+    const rows = (await gt('/trades', 1)).data.map((d) => d.attributes).filter((a) => Number(a.volume_in_usd) >= 1);
+    S.trades = rows.map((a) => {
+      const stockIn = a.from_token_address.toLowerCase() === S.stock.addr;
+      return {
+        hash: a.tx_hash, time: Date.parse(a.block_timestamp), usd: Number(a.volume_in_usd), stockIn,
+        shares: Number(stockIn ? a.from_token_amount : a.to_token_amount),
+        coins: Number(stockIn ? a.to_token_amount : a.from_token_amount),
+      };
+    });
+  } catch { S.trades ??= []; }
+}
+
+function windowed(series, hours) {
+  if (!series || series.length < 2) return null;
+  const now = Date.now() / 1000, cut = now - hours * 3600;
+  const before = series.filter(([t]) => t < cut).pop();
+  const inside = series.filter(([t]) => t >= cut);
+  const start = before ? before[1] : inside[0][1];
+  const end = series[series.length - 1][1];
+  const points = [[before ? cut : inside[0][0], 0], ...inside.map(([t, v]) => [Math.min(t + 3600, now), v / start - 1])];
+  return { change: end / start - 1, points, cut, now };
+}
+
+function marketClock() {
+  const ny = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const day = ny.getDay(), mins = ny.getHours() * 60 + ny.getMinutes();
+  const weekday = day >= 1 && day <= 5;
+  if (weekday && mins >= 570 && mins < 960) return { open: true, wait: 960 - mins };
+  if (weekday && mins < 570) return { open: false, wait: 570 - mins };
+  let days = 1, d = (day + 1) % 7;
+  while (d === 0 || d === 6) { days++; d = (d + 1) % 7; }
+  return { open: false, wait: 1440 - mins + (days - 1) * 1440 + 570 };
+}
+const span = (m) => m >= 1440 ? Math.floor(m / 1440) + 'd ' + Math.floor((m % 1440) / 60) + 'h' : Math.floor(m / 60) + 'h ' + (m % 60) + 'm';
+const ago = (ms) => { const m = Math.max(0, Math.round((Date.now() - ms) / 60000)); return m < 1 ? 'now' : m < 60 ? m + 'm ago' : Math.floor(m / 60) + 'h ago'; };
+const stat = (k, v, m, cls) => { const s = el('div', 'stat' + (cls ? ' ' + cls : '')); s.append(el('div', 'k', k), el('div', 'v', v)); if (m) s.append(el('div', 'm', m)); return s; };
+
+function renderHead() {
+  const { main, stock } = S;
+  document.title = 'Stockyard · ' + S.symbol;
+  const chip = el('span', 'chip');
+  chip.id = 'chg';
+  $('title').replaceChildren(avatar(S.logo, S.symbol), el('h1', null, S.symbol), el('span', 'price', usd(S.price)), chip);
+  const link = (text, href) => { const a = el('a', null, text); a.href = href; a.target = '_blank'; a.rel = 'noopener'; return a; };
+  $('meta').replaceChildren(el('span', 'pill', 'Trades against ' + stock.name), el('span', null, short(addr)),
+    link('DexScreener', main.p.url), link('BscScan', 'https://bscscan.com/token/' + addr));
+  const stockLiq = S.pools.filter((x) => STOCK_BY_ADDR[x.otherAddr]).reduce((a, x) => a + x.liq, 0);
+  const allLiq = S.pools.reduce((a, x) => a + x.liq, 0);
+  const stats = $('stats');
+  stats.replaceChildren(
+    stat('Market cap', usd(S.mcap)),
+    stat('24h volume', usd(S.vol24)),
+    stat(stock.name + ' in its pool', num(main.otherRes) + ' shares', 'worth ' + usd(main.otherRes * stock.price)),
+    stat('Liquidity against stock', allLiq ? Math.round(stockLiq / allLiq * 100) + '%' : '—', usd(allLiq) + ' in all pools'));
+  if (S.holders) stats.append(stat('Holders', S.holders.toLocaleString('en-US')));
+  if (S.sellTax != null) stats.append(stat('Coin tax', (S.buyTax * 100).toFixed(1) + '% / ' + (S.sellTax * 100).toFixed(1) + '%', 'on buys / on sells'));
+
+  const rows = $('pools');
+  rows.replaceChildren();
+  for (const x of S.pools.filter((x) => x.liq > 0)) {
+    const tr = el('tr');
+    const name = el('td');
+    name.append(el('span', 'coin', STOCK_BY_ADDR[x.otherAddr]?.name || x.other.symbol), el('span', 'addr', (x.p.dexId || '') + ' ' + (x.p.labels || []).join(' ')));
+    const share = el('td');
+    const meter = el('div', 'meter');
+    const fill = el('i');
+    fill.style.width = (allLiq ? x.liq / allLiq * 100 : 0).toFixed(1) + '%';
+    meter.append(fill);
+    share.append(meter);
+    tr.append(name, el('td', null, usd(x.liq)), share);
+    rows.append(tr);
+  }
+}
+
+function renderMove() {
+  const { stock } = S;
+  const c = windowed(S.coinSeries, S.hours), s = windowed(S.stockSeries, S.hours);
+  const split = $('split'), story = $('story'), chart = $('chart'), legend = $('legend'), chg = $('chg');
+  chart.replaceChildren(); chart.hidden = true; legend.replaceChildren();
+  // Without hourly history, the 24-hour view can still use DexScreener's own 24h changes.
+  const hasHistory = c && s;
+  const useDay = !hasHistory && S.hours === 24 && S.dayChange.coin != null && S.dayChange.stock != null;
+  if (!hasHistory && !useDay) {
+    split.replaceChildren(); chg.textContent = ''; chg.className = 'chip'; chg.hidden = true;
+    story.textContent = 'Price history for this window is not available right now. It will retry shortly.';
+    return;
+  }
+  const coinChange = hasHistory ? c.change : S.dayChange.coin, stockChange = hasHistory ? s.change : S.dayChange.stock;
+  const meme = (1 + coinChange) / (1 + stockChange) - 1;
+  const cls = (x) => x >= 0 ? 'up' : 'down';
+  const big = (k, x, m, extra) => { const n = stat(k, pct(x), m, extra); if (!extra) n.querySelector('.v').classList.add(cls(x)); return n; };
+  split.replaceChildren(
+    big(S.symbol + ' in dollars', coinChange, 'what your wallet shows', 'total'),
+    big('From the meme', meme, 'people trading ' + S.symbol),
+    big('From the stock', stockChange, stock.name + ' token moving'));
+  const verb = (x) => x >= 0 ? 'rose' : 'fell';
+  const label = { 24: 'the last 24 hours', 72: 'the last 3 days', 168: 'the last 7 days' }[S.hours];
+  story.textContent = `Over ${label}, ${S.symbol} ${verb(coinChange)} ${Math.abs(coinChange * 100).toFixed(1)}% in dollars. The ${stock.name} token ${verb(stockChange)} ${Math.abs(stockChange * 100).toFixed(1)}%, so the meme itself ${verb(meme)} ${Math.abs(meme * 100).toFixed(1)}% against the stock.`;
+  chg.hidden = false;
+  chg.textContent = pct(coinChange) + ' · ' + { 24: '24h', 72: '3d', 168: '7d' }[S.hours];
+  chg.className = 'chip ' + cls(coinChange);
+  if (!hasHistory) return;
+
+  const W = 680, H = 190, pad = 12;
+  const ys = [...c.points, ...s.points].map((p) => p[1]).concat(0);
+  const lo = Math.min(...ys), hi = Math.max(...ys), range = hi - lo || 1;
+  const x = (t) => pad + (t - c.cut) / (c.now - c.cut) * (W - 2 * pad);
+  const y = (v) => pad + (hi - v) / range * (H - 2 * pad);
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', `${S.symbol} and ${stock.name} token price change over ${label}`);
+  const add = (tag, attrs) => { const n = document.createElementNS(ns, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); svg.append(n); };
+  add('line', { x1: pad, x2: W - pad, y1: y(0), y2: y(0), stroke: '#cfc8b4', 'stroke-width': 1.5, 'stroke-dasharray': '5 5' });
+  const path = (pts) => [...pts, [c.now, pts[pts.length - 1][1]]].map(([t, v]) => x(t).toFixed(1) + ',' + y(v).toFixed(1)).join(' ');
+  add('polyline', { points: path(s.points), fill: 'none', stroke: '#121212', 'stroke-width': 2, 'stroke-dasharray': '2 6', 'stroke-linecap': 'round' });
+  add('polyline', { points: path(c.points), fill: 'none', stroke: '#121212', 'stroke-width': 7, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' });
+  add('polyline', { points: path(c.points), fill: 'none', stroke: '#ffd400', 'stroke-width': 3.5, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' });
+  chart.append(svg);
+  chart.hidden = false;
+  const key = (css, text) => { const k = el('span'); const i = el('i'); i.style.cssText = css; k.append(i, text); return k; };
+  legend.append(key('background:#ffd400;outline:2px solid #121212', S.symbol + ' in dollars'), key('background:repeating-linear-gradient(90deg,#121212 0 3px,transparent 3px 7px)', stock.name + ' token'));
+}
+
+function renderClock() {
+  const m = marketClock(), box = $('clock');
+  const dot = el('span', 'dot' + (m.open ? '' : ' closed'));
+  const text = el('span');
+  if (m.open) text.append(el('b', null, 'US market open'), ` · The ${S.stock.name} token should track the real stock closely. Closes in ${span(m.wait)}.`);
+  else text.append(el('b', null, 'US market closed'), ` · The ${S.stock.name} token keeps trading, so its price can drift from the real stock. Reopens in ${span(m.wait)}.`);
+  box.replaceChildren(dot, text);
+}
+
+function renderSell() {
+  const { main, stock } = S;
+  $('amount-label').textContent = S.symbol + ' to sell';
+  const opts = $('opts'), note = $('sell-note');
+  const dx = Number($('amount').value.replace(/,/g, ''));
+  opts.replaceChildren();
+  if (!(main.p.labels || []).includes('v2')) { note.textContent = 'Estimates are only available for v2 pools.'; return; }
+  if (!(dx > 0)) { note.textContent = 'Enter an amount to see what you would receive.'; return; }
+  const tax = S.sellTax || 0;
+  const net = dx * (1 - tax) * (1 - POOL_FEE);
+  const out = net * main.otherRes / (main.coinRes + net);
+  const impact = 1 - out / (net * main.otherRes / main.coinRes);
+  const opt = (k, tag, v, m, best) => { const o = el('div', 'opt' + (best ? ' best' : '')); const kk = el('div', 'k', k); if (tag) kk.append(el('span', null, tag)); o.append(kk, el('div', 'v', v), el('div', 'm', m)); return o; };
+  opts.append(
+    opt('Keep the stock', '1 swap', num(out) + ' shares', stock.name + ', worth about ' + usd(out * stock.price), true),
+    opt('Take cash', '2 swaps', 'about ' + usd(out * stock.price), 'minus a second swap fee'));
+  note.textContent = `Price impact ${(impact * 100).toFixed(2)}%. Includes the 0.25% pool fee` + (tax ? ` and the coin's ${(tax * 100).toFixed(1)}% sell tax.` : '.') + ' Trading opens once Binance\'s API is connected.';
+}
+
+function renderTape() {
+  const tape = $('tape'), flow = $('flow'), trades = S.trades || [];
+  if (!trades.length) { flow.textContent = S.trades ? 'No recent trades in this pool.' : 'Loading recent trades'; tape.replaceChildren(); return; }
+  const inn = trades.filter((t) => t.stockIn).reduce((a, t) => a + t.shares, 0);
+  const out = trades.filter((t) => !t.stockIn).reduce((a, t) => a + t.shares, 0);
+  const hours = Math.max(1, Math.round((Date.now() - trades[trades.length - 1].time) / 3600000));
+  flow.replaceChildren(`Last ${hours} hours: `, el('b', 'up', num(inn) + ' shares in'), ' from buyers, ', el('b', 'down', num(out) + ' shares out'), ' to sellers.');
+  const first = S.seen.size === 0;
+  tape.replaceChildren();
+  for (const t of trades.slice(0, 10)) {
+    const li = el('li', !first && !S.seen.has(t.hash) ? 'new' : '');
+    const mid = el('div');
+    const act = el('span', 'act');
+    act.append(el('span', 'tag ' + (t.stockIn ? 'buy' : 'sell'), t.stockIn ? 'BUY' : 'SELL'), num(t.coins) + ' ' + S.symbol);
+    mid.append(act, el('span', 'd', num(t.shares) + ' ' + S.stock.name + ' shares ' + (t.stockIn ? 'into the pool' : 'out of the pool')));
+    const right = el('a', null, usd(t.usd));
+    right.href = 'https://bscscan.com/tx/' + t.hash; right.target = '_blank'; right.rel = 'noopener';
+    li.append(el('span', 't', ago(t.time)), mid, right);
+    tape.append(li);
+  }
+  for (const t of trades) S.seen.add(t.hash);
+}
+
+const stamp = () => { $('updated').textContent = 'Live · ' + new Date().toLocaleTimeString(); };
+
+async function init() {
+  if (!/^0x[0-9a-f]{40}$/.test(addr)) return fail('That is not a valid coin address.');
+  try { await loadPools(); } catch (err) { return fail(err.message); }
+  // Show the page as soon as the pools are in; the slower sources fill in behind it.
+  $('state').hidden = true; $('page').hidden = false;
+  renderHead(); renderMove(); renderClock(); renderSell(); renderTape(); stamp();
+  loadSafety().then(() => { renderHead(); renderMove(); renderSell(); });
+  loadTrades().then(renderTape);
+  const history = async () => { await loadHistory(); renderMove(); setTimeout(history, S.coinSeries ? 300000 : 30000); };
+  history();
+  setInterval(async () => { await loadTrades(); renderTape(); renderClock(); stamp(); }, 30000);
+  setInterval(async () => { try { await loadPools(); renderHead(); renderMove(); renderSell(); } catch {} }, 60000);
+}
+
+$('win').onclick = (e) => {
+  const h = Number(e.target.dataset.h);
+  if (!h) return;
+  S.hours = h;
+  for (const b of $('win').children) b.classList.toggle('on', Number(b.dataset.h) === h);
+  renderMove();
+};
+$('amount').oninput = renderSell;
+init();
+</script>
+</body>
+</html>

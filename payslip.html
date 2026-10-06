@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stockyard · 牛马工资条 Payslip</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=JetBrains+Mono:wght@500;700&family=Noto+Sans+SC:wght@500;900&family=Space+Grotesk:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <a class="brand" href="index.html">STOCKYARD <small>牛马</small></a>
+    <nav class="nav">
+      <a href="index.html">League</a>
+      <a class="on" href="payslip.html">工资条 Payslip</a>
+    </nav>
+  </div>
+
+  <section class="pay">
+    <span class="kicker">Stock memes pay their holders</span>
+    <h1><span>牛马工资条</span></h1>
+    <h2>Your memes are paying you in stock.</h2>
+    <p>Paste a wallet and print its payslip: every stock token it holds, and the stock memes behind it.</p>
+    <form class="lookup" id="form">
+      <input id="wallet" placeholder="0x… wallet address" autocomplete="off" spellcheck="false" aria-label="Wallet address">
+      <button class="btn" type="submit">Print payslip</button>
+    </form>
+    <div class="tries">Try one:
+      <button type="button" data-w="0x28816c4c4792467390c90e5b426f198570e29307">NIUMA's largest holder</button>
+      <button type="button" data-w="0xe1B0e19F8e014e760BFa6F81769Fd3587CF9d767">NIUMA treasury</button>
+    </div>
+    <div class="err" id="err" role="alert"></div>
+  </section>
+
+  <div class="printer" id="printer" hidden>
+    <div class="slot"><span class="dot"></span><span id="slot-text">READY</span></div>
+    <div class="feed" id="feed"><canvas id="slip" width="1080" height="1128" role="img"></canvas></div>
+    <div class="actions">
+      <button class="btn" id="save" type="button">Save image</button>
+      <button class="btn plain" id="share" type="button">Share on X</button>
+      <button class="btn plain" id="copy" type="button">Copy link</button>
+    </div>
+    <p class="sr" id="summary"></p>
+  </div>
+  <p class="note" style="margin: 30px auto 0; text-align: center;">The payslip shows the stock tokens in a wallet today and the stock memes it holds. Some coins, like NIUMA, pay holders in stock; stock you bought yourself is counted too. Balances come straight from BNB Chain, prices from DexScreener.</p>
+</div>
+
+<script src="shared.js"></script>
+<script>
+const P = { league: null, data: null };
+
+const grade = (total) => total <= 0 ? '试用期 · On probation' : total < 1 ? '实习牛马 · Intern' : total < 10 ? '初级牛马 · Junior' : total < 100 ? '高级牛马 · Senior' : total < 1000 ? '主管 · Manager' : '股东 · Shareholder';
+
+async function lookup(wallet) {
+  P.league ??= await loadLeague();
+  const { rows, prices } = P.league;
+  const memes = [...new Set(rows.map((r) => r.address))];
+  const bal = await balances(wallet, [...Object.values(STOCKS).map((s) => s[0]), ...memes]);
+  const held = rows.filter((r) => bal[r.address] > 0).map((r) => ({ ...r, bal: bal[r.address], value: bal[r.address] * r.price }));
+  const lines = Object.entries(STOCKS).map(([sym, [a, name]]) => ({
+    sym, name, shares: bal[a] || 0, value: (bal[a] || 0) * (prices[sym] || 0),
+    via: held.filter((h) => h.sym === sym).sort((x, y) => y.value - x.value),
+  })).filter((l) => l.value >= 0.01).sort((a, b) => b.value - a.value);
+  const employers = [...new Map(held.sort((x, y) => y.value - x.value).map((h) => [h.address, h])).values()];
+  return { wallet, lines, employers, total: lines.reduce((a, l) => a + l.value, 0) };
+}
+
+function drawSlip(d) {
+  const W = 1080, rowH = 128, shown = d.lines.slice(0, 6), n = Math.max(shown.length, 1);
+  const H = 1000 + n * rowH;
+  const c = $('slip'), SHADOW = 14;
+  c.width = W + SHADOW; c.height = H + SHADOW;
+  const g = c.getContext('2d');
+  const INK = '#121212', PAPER = '#fffdf6', YEL = '#ffd400', RED = '#df3a2c', MUT = '#6a6455';
+  const mono = (w, s) => `${w} ${s}px "JetBrains Mono", "Noto Sans SC", monospace`;
+  const body = (w, s) => `${w} ${s}px "Space Grotesk", "Noto Sans SC", sans-serif`;
+  const disp = (s) => `400 ${s}px "Archivo Black", "Noto Sans SC", sans-serif`;
+  const text = (t, x, y, font, color = INK, align = 'left') => { g.font = font; g.fillStyle = color; g.textAlign = align; g.fillText(t, x, y); };
+  const fit = (t, font, max) => { g.font = font; if (g.measureText(t).width <= max) return t; while (t.length > 1 && g.measureText(t + '…').width > max) t = t.slice(0, -1); return t + '…'; };
+  const dash = (y) => { g.save(); g.setLineDash([14, 10]); g.lineWidth = 3; g.strokeStyle = INK; g.beginPath(); g.moveTo(56, y); g.lineTo(W - 56, y); g.stroke(); g.restore(); };
+
+  // paper with a torn bottom edge, sitting on a hard ink shadow
+  const tooth = 30, bottom = H - 6;
+  const paper = (o) => {
+    g.beginPath();
+    g.moveTo(3 + o, 3 + o); g.lineTo(W - 3 + o, 3 + o); g.lineTo(W - 3 + o, bottom - tooth + o);
+    for (let x = W - 3, down = true; x > 3; x -= tooth, down = !down) g.lineTo(Math.max(3, x - tooth) + o, (down ? bottom : bottom - tooth) + o);
+    g.closePath();
+  };
+  paper(SHADOW - 3); g.fillStyle = INK; g.fill();
+  paper(0);
+  g.fillStyle = PAPER; g.fill();
+  g.save(); g.clip(); g.fillStyle = YEL; g.fillRect(0, 0, W, 190); g.restore();
+  g.lineWidth = 6; g.strokeStyle = INK; g.lineJoin = 'miter'; g.stroke();
+  g.beginPath(); g.moveTo(3, 190); g.lineTo(W - 3, 190); g.stroke();
+
+  text('牛马工资条', 56, 128, '900 96px "Noto Sans SC", sans-serif');
+  text('PAYSLIP', W - 56, 98, disp(52), INK, 'right');
+  text('PAID IN STOCK', W - 56, 142, mono(700, 24), INK, 'right');
+
+  let y = 268;
+  const names = d.employers.map((e) => e.coin);
+  const meta = [
+    ['EMPLOYEE', d.wallet.slice(0, 10) + '…' + d.wallet.slice(-8)],
+    ['PAY DATE', new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })],
+    ['EMPLOYERS', names.length ? names.slice(0, 3).join(', ') + (names.length > 3 ? ' +' + (names.length - 3) : '') : 'none yet'],
+    ['GRADE', grade(d.total)],
+  ];
+  for (const [k, v] of meta) {
+    text(k, 56, y, mono(500, 26), MUT);
+    text(fit(v, mono(700, 30), W - 56 - 330), 330, y, mono(700, 30));
+    y += 60;
+  }
+  dash(y - 18);
+  y += 36;
+  text('STOCK', 56, y, mono(500, 24), MUT);
+  text('SHARES', 740, y, mono(500, 24), MUT, 'right');
+  text('VALUE', W - 56, y, mono(500, 24), MUT, 'right');
+  y += 26;
+  if (!shown.length) {
+    text('No stock in this wallet yet', 56, y + 58, body(700, 42));
+    text('Hold a stock meme like 牛马 NIUMA to get paid in stock', 56, y + 100, mono(500, 24), MUT);
+  }
+  for (const l of shown) {
+    const via = l.via.length ? 'via ' + l.via.slice(0, 2).map((v) => v.coin + ' · you hold ' + num(v.bal)).join(', ') : 'held directly';
+    text(l.name, 56, y + 56, body(700, 46));
+    text(fit(via, mono(500, 24), 540), 56, y + 98, mono(500, 24), MUT);
+    text(num(l.shares), 740, y + 62, mono(700, 36), INK, 'right');
+    text(usd(l.value), W - 56, y + 62, mono(700, 36), INK, 'right');
+    y += rowH;
+  }
+  if (!shown.length) y += rowH;
+  dash(y + 10);
+  y += 70;
+  text(d.lines.length > shown.length ? `TOTAL PAID IN STOCK · ${d.lines.length} STOCKS` : 'TOTAL PAID IN STOCK', 56, y, mono(700, 26), MUT);
+  y += 100;
+  text(usd(d.total), 56, y, disp(104));
+
+  // red company seal
+  g.save();
+  g.translate(W - 200, y - 40); g.rotate(-0.24); g.globalAlpha = .9;
+  g.strokeStyle = RED; g.fillStyle = RED; g.textAlign = 'center';
+  g.lineWidth = 9; g.beginPath(); g.arc(0, 0, 128, 0, Math.PI * 2); g.stroke();
+  g.lineWidth = 3; g.beginPath(); g.arc(0, 0, 110, 0, Math.PI * 2); g.stroke();
+  g.font = '900 68px "Noto Sans SC", sans-serif'; g.fillText(d.total > 0 ? '已发薪' : '待发薪', 0, 22);
+  g.font = mono(700, 19); g.fillText(d.total > 0 ? 'PAID IN STOCK' : 'NOT PAID YET', 0, -56); g.fillText('STOCKYARD', 0, 72);
+  g.restore();
+
+  // barcode from the wallet address
+  let bx = 56;
+  const by = y + 70;
+  g.fillStyle = INK;
+  [...d.wallet.slice(2)].forEach((ch, i) => { const w = 3 + (parseInt(ch, 16) % 4) * 2; if (i % 2 === 0) g.fillRect(bx, by, w, 70); bx += w + 3; });
+  text('stockyard · stock tokens in this wallet today', 56, by + 110, mono(500, 22), MUT);
+
+  c.setAttribute('aria-label', 'Payslip for wallet ' + short(d.wallet));
+  $('summary').textContent = `Payslip for ${d.wallet}. ` + (d.lines.length
+    ? d.lines.map((l) => `${num(l.shares)} ${l.name} shares worth ${usd(l.value)}`).join('; ') + `. Total ${usd(d.total)}.`
+    : 'No stock tokens in this wallet yet.');
+}
+
+async function print(wallet) {
+  const err = $('err');
+  err.textContent = '';
+  wallet = wallet.trim();
+  if (!/^0x[0-9a-fA-F]{40}$/.test(wallet)) { err.textContent = 'Enter a wallet address: 0x followed by 40 characters.'; return; }
+  $('wallet').value = wallet;
+  $('printer').hidden = false;
+  $('feed').classList.remove('print');
+  $('slot-text').textContent = 'PRINTING';
+  try {
+    const fonts = ['900 96px "Noto Sans SC"', '400 52px "Archivo Black"', '700 36px "JetBrains Mono"', '500 24px "JetBrains Mono"', '700 46px "Space Grotesk"'];
+    const [data] = await Promise.all([lookup(wallet), ...fonts.map((f) => document.fonts.load(f, '牛马工资条已待发薪试用期实习初高级主管股东Aa0').catch(() => {}))]);
+    P.data = data;
+    drawSlip(data);
+    history.replaceState(null, '', '?w=' + wallet);
+    void $('feed').offsetWidth;
+    $('feed').classList.add('print');
+    $('slot-text').textContent = data.total > 0 ? 'PAID' : 'NOTHING TO PAY';
+  } catch (e) {
+    $('printer').hidden = true;
+    err.textContent = 'Could not print this payslip: ' + e.message + '. Try again in a moment.';
+  }
+}
+
+$('form').onsubmit = (e) => { e.preventDefault(); print($('wallet').value); };
+for (const b of document.querySelectorAll('.tries button')) b.onclick = () => print(b.dataset.w);
+$('save').onclick = () => $('slip').toBlob((blob) => {
+  const a = el('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'niuma-payslip-' + P.data.wallet.slice(2, 8) + '.png';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+});
+$('share').onclick = () => {
+  const d = P.data, n = d.lines.length;
+  const text = n ? `My memes paid me in stock: ${usd(d.total)} across ${n} stock${n > 1 ? 's' : ''}. 牛马工资条` : 'Waiting on my first stock payslip. 牛马工资条';
+  window.open('https://x.com/intent/post?text=' + encodeURIComponent(text) + '&url=' + encodeURIComponent(location.href), '_blank', 'noopener');
+};
+$('copy').onclick = async () => {
+  try { await navigator.clipboard.writeText(location.href); $('copy').textContent = 'Link copied'; } catch { $('copy').textContent = 'Copy failed'; }
+  setTimeout(() => { $('copy').textContent = 'Copy link'; }, 1800);
+};
+
+const start = new URLSearchParams(location.search).get('w');
+if (start) print(start);
+</script>
+</body>
+</html>
