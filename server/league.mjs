@@ -22,40 +22,88 @@ const CASH = new Set([
   '0xc5f0f7b66764f6ec8c8dff7ba683102295e16409', '0x8d0d000ee44948fc98c9b98a4fa4921476f08b0d', '0x7130d2a12b9bcbfae4f2634d864a1ee1ce3ead9c',
   '0x2170ed0880ac9a755fd29b2688956bd959f933f8', '0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82',
 ]);
+// Short display names, English and Chinese, for the companies people actually pair memes with.
 const NAMES = {
-  SPY: 'S&P 500', QQQ: 'Nasdaq 100', SPCX: 'SpaceX', AAPL: 'Apple', NVDA: 'Nvidia', TSLA: 'Tesla', BABA: 'Alibaba', GOOGL: 'Google',
-  MSFT: 'Microsoft', NFLX: 'Netflix', MSTR: 'Strategy', AMZN: 'Amazon', HOOD: 'Robinhood', CRCL: 'Circle', META: 'Meta', INTC: 'Intel',
-  SNDK: 'Sandisk', TSM: 'TSMC', BNC: 'BNC', COIN: 'Coinbase', AMD: 'AMD', MU: 'Micron', PLTR: 'Palantir', GME: 'GameStop', AMC: 'AMC',
-  OPENAI: 'OpenAI', POLYMARKET: 'Polymarket', KLSH: 'Kalshi', TQQQ: 'Nasdaq 3x', SQQQ: 'Nasdaq -3x', ORCL: 'Oracle', AVGO: 'Broadcom',
-  PYPL: 'PayPal', IBM: 'IBM', ARM: 'Arm', DELL: 'Dell', ADBE: 'Adobe', CRM: 'Salesforce', PDD: 'PDD', DJT: 'Trump Media', RDDT: 'Reddit',
-  EWY: 'South Korea ETF', QCOM: 'Qualcomm', GS: 'Goldman Sachs', ASML: 'ASML', SMCI: 'Supermicro', MRNA: 'Moderna', HIMS: 'Hims & Hers',
-  SKHY: 'SK Hynix',
+  SPY: ['S&P 500', '标普500'], QQQ: ['Nasdaq 100', '纳斯达克100'], SPCX: ['SpaceX', 'SpaceX'], AAPL: ['Apple', '苹果'], NVDA: ['Nvidia', '英伟达'],
+  TSLA: ['Tesla', '特斯拉'], BABA: ['Alibaba', '阿里巴巴'], GOOGL: ['Google', '谷歌'], MSFT: ['Microsoft', '微软'], NFLX: ['Netflix', '奈飞'],
+  MSTR: ['Strategy', '微策略'], AMZN: ['Amazon', '亚马逊'], HOOD: ['Robinhood', 'Robinhood'], CRCL: ['Circle', 'Circle'], META: ['Meta', 'Meta'],
+  INTC: ['Intel', '英特尔'], SNDK: ['Sandisk', '闪迪'], TSM: ['TSMC', '台积电'], BNC: ['BNC', 'BNC'], COIN: ['Coinbase', 'Coinbase'], AMD: ['AMD', 'AMD'],
+  MU: ['Micron', '美光'], PLTR: ['Palantir', 'Palantir'], GME: ['GameStop', '游戏驿站'], AMC: ['AMC', 'AMC'], OPENAI: ['OpenAI', 'OpenAI'],
+  POLYMARKET: ['Polymarket', 'Polymarket'], KLSH: ['Kalshi', 'Kalshi'], TQQQ: ['Nasdaq 3x', '三倍做多纳指'], SQQQ: ['Nasdaq -3x', '三倍做空纳指'],
+  ORCL: ['Oracle', '甲骨文'], AVGO: ['Broadcom', '博通'], PYPL: ['PayPal', 'PayPal'], IBM: ['IBM', 'IBM'], ARM: ['Arm', 'Arm'], DELL: ['Dell', '戴尔'],
+  ADBE: ['Adobe', 'Adobe'], CRM: ['Salesforce', 'Salesforce'], PDD: ['PDD', '拼多多'], DJT: ['Trump Media', '特朗普媒体'], RDDT: ['Reddit', 'Reddit'],
+  EWY: ['South Korea ETF', '韩国ETF'], QCOM: ['Qualcomm', '高通'], GS: ['Goldman Sachs', '高盛'], ASML: ['ASML', '阿斯麦'], SMCI: ['Supermicro', '超微电脑'],
+  MRNA: ['Moderna', 'Moderna'], HIMS: ['Hims & Hers', 'Hims & Hers'], SKHY: ['SK Hynix', 'SK海力士'], FXI: ['China Large-Cap ETF', '中国大盘ETF'],
+  BILI: ['Bilibili', '哔哩哔哩'], SGOV: ['T-Bill ETF', '短期美债ETF'], DIS: ['Disney', '迪士尼'], MCD: ["McDonald's", '麦当劳'], SLV: ['Silver', '白银'],
+  JD: ['JD.com', '京东'], BIDU: ['Baidu', '百度'], USO: ['Oil', '原油'], TLT: ['Long Treasuries', '长期美债'], LI: ['Li Auto', '理想汽车'],
+  NTES: ['NetEase', '网易'], FUTU: ['Futu', '富途'], KO: ['Coca-Cola', '可口可乐'], NKE: ['Nike', '耐克'], BZ: ['Boss Zhipin', 'BOSS直聘'],
 };
 
-// Binance's saved RWA list adds Chinese names and logos to the stock tokens it covers.
-const rwa = existsSync(root + 'data/rwa-tokens.json')
-  ? new Map(JSON.parse(readFileSync(root + 'data/rwa-tokens.json', 'utf8')).tokens.map((t) => [t.address, t])) : new Map();
+// Binance's saved RWA list: Chinese names and logos for the tokens it covers, and the Ondo tokens themselves.
+const rwaList = existsSync(root + 'data/rwa-tokens.json') ? JSON.parse(readFileSync(root + 'data/rwa-tokens.json', 'utf8')).tokens : [];
+const rwa = new Map(rwaList.map((t) => [t.address, t]));
+const describe = (symbol, address, ticker, issuer, fullName) => {
+  const extra = rwa.get(address);
+  return {
+    symbol, address, ticker, issuer,
+    name: NAMES[ticker]?.[0] || ticker, nameZh: NAMES[ticker]?.[1] || extra?.nameZh || null,
+    fullName: fullName || extra?.name || null, logo: extra?.logo || null,
+  };
+};
+const ISSUER = { 3: 'bStocks', 4: 'pre-IPO', 9: 'bStocks' };
+// The bStocks family from Binance's public list first, then every Ondo token. Order matters:
+// data/pools.bin stores each pool's stock as a position in this list.
 export const stocks = readFileSync(root + 'data/bsc-stock-tokens.csv', 'utf8').trim().split('\n').slice(1).map((line) => {
-  const [symbol, hex, ticker, type, multiplier] = line.split(',');
-  const address = '0x' + hex, extra = rwa.get(address);
-  return { symbol, address, ticker, name: NAMES[ticker] || ticker, nameZh: extra?.nameZh || null, logo: extra?.logo || null, type: Number(type), multiplier: Number(multiplier) };
+  const [symbol, hex, ticker, type] = line.split(',');
+  return describe(symbol, '0x' + hex, ticker, ISSUER[type] || 'bStocks');
 });
+{
+  const have = new Set(stocks.map((s) => s.address));
+  for (const t of rwaList) if (t.issuer === 'ondo' && !have.has(t.address)) stocks.push(describe(t.symbol, t.address, t.ticker, 'Ondo', t.name));
+}
 const stockByAddr = new Map(stocks.map((s) => [s.address, s]));
 
-// Dollar price of each stock token from its deepest USDT pool on PancakeSwap (v3 fee tiers, then v2).
-export async function stockPrices() {
+// Which pools could price each stock: its USDT pools on PancakeSwap (v3 fee tiers, then v2).
+// Pool addresses rarely change, so the lookup is kept for half an hour.
+let candidates = { at: 0, list: null };
+async function pricePools() {
+  if (candidates.list && Date.now() - candidates.at < 30 * 60000) return candidates.list;
   const pools = await multicallAll(stocks.flatMap((s) => [
     ...V3_FEES.map((fee) => [V3_FACTORY, '1698ee82' + addrWord(s.address) + addrWord(USDT) + word(fee)]),
     [V2_FACTORY, 'e6a43905' + addrWord(s.address) + addrWord(USDT)],
   ]));
-  const per = V3_FEES.length + 1;
-  const cands = [];
+  const per = V3_FEES.length + 1, list = [];
   stocks.forEach((s, i) => {
     for (let k = 0; k < per; k++) {
       const pool = pools[i * per + k] ? toAddr(pools[i * per + k]) : null;
-      if (pool && !/^0x0+$/.test(pool)) cands.push({ s, pool, v3: k < V3_FEES.length });
+      if (pool && !/^0x0+$/.test(pool)) list.push({ s, pool, v3: k < V3_FEES.length });
     }
   });
+  candidates = { at: Date.now(), list };
+  return list;
+}
+
+// Ondo tokens mostly trade by request-for-quote, so their on-chain pools are thin and can sit a
+// few percent off. For the Ondo tokens that memes are paired with, Binance's own token price is
+// used when it answers, and kept for five minutes.
+let ondoPrices = { at: 0, map: new Map() };
+async function binanceOndoPrices() {
+  if (Date.now() - ondoPrices.at < 5 * 60000) return ondoPrices.map;
+  const wanted = stocks.filter((s) => s.issuer === 'Ondo' && S.used.has(s.address));
+  try {
+    const map = new Map();
+    for (let i = 0; i < wanted.length; i += 20) {
+      const data = await bw3('/api/v1/dex/market/rwa/price', { params: { binanceChainId: '56', tokenContractAddresses: wanted.slice(i, i + 20).map((s) => s.address).join(',') } });
+      for (const x of data || []) if (Number(x.tokenPrice) > 0) map.set(x.tokenContractAddress.toLowerCase(), Number(x.tokenPrice));
+    }
+    ondoPrices = { at: Date.now(), map };
+  } catch { ondoPrices.at = Date.now() - 4 * 60000; /* try again in a minute, keep the old prices */ }
+  return ondoPrices.map;
+}
+
+// Dollar price of each stock token: its deepest on-chain USDT pool, or Binance's price for Ondo tokens.
+export async function stockPrices() {
+  const cands = await pricePools();
   const data = await multicallAll(cands.flatMap((c) => [
     [USDT, '70a08231' + addrWord(c.pool)], [c.s.address, '70a08231' + addrWord(c.pool)], [c.pool, c.v3 ? '3850c7bd' : '0902f1ac'],
   ]));
@@ -71,13 +119,15 @@ export async function stockPrices() {
     } else {
       price = usdt / held;
     }
-    if (!best[c.s.symbol] || usdt > best[c.s.symbol].usdt) best[c.s.symbol] = { price, usdt, pool: c.pool };
+    if (!best[c.s.symbol] || usdt > best[c.s.symbol].usdt) best[c.s.symbol] = { price, usdt, pool: c.pool, source: 'chain' };
   });
+  const ondo = await binanceOndoPrices();
+  for (const s of stocks) if (ondo.has(s.address)) best[s.symbol] = { price: ondo.get(s.address), usdt: best[s.symbol]?.usdt || 0, pool: best[s.symbol]?.pool || null, source: 'binance' };
   return best;
 }
 
 // What stays in memory between builds.
-const S = { mtime: 0, scan: null, pools: [], extra: [], live: null, fullAt: 0, coins: new Map(), market: new Map(), logos: new Map() };
+const S = { mtime: 0, scan: null, pools: [], extra: [], used: new Set(), live: null, fullAt: 0, coins: new Map(), market: new Map(), logos: new Map() };
 const toPool = (p) => (p.stock0 ? { pair: p.pair, index: p.index, stock: p.token0, coin: p.token1 } : { pair: p.pair, index: p.index, stock: p.token1, coin: p.token0 });
 const isMeme = (p) => !stockByAddr.has(p.coin) && !CASH.has(p.coin);
 
@@ -94,11 +144,12 @@ function loadScan() {
     S.scan = { from: scan.scannedFrom, to: scan.scannedTo, at: scan.updatedAt };
     scannedTo = scan.scannedTo;
   } else {
-    // 45 bytes per pool: pair, coin, stock number, pair index.
+    // 46 bytes per pool: pair, coin, stock position in the list above, pair index.
     const meta = JSON.parse(readFileSync(root + 'data/pools.json', 'utf8')), buf = readFileSync(PACK);
+    if (meta.format !== 2 || meta.stocks !== stocks.length) throw new Error('data/pools.bin does not match the stock list. Run: node scripts/pack-pools.mjs');
     S.pools = [];
-    for (let o = 0; o + 45 <= buf.length; o += 45) {
-      const p = { pair: '0x' + buf.toString('hex', o, o + 20), coin: '0x' + buf.toString('hex', o + 20, o + 40), stock: stocks[buf.readUInt8(o + 40)].address, index: buf.readUInt32BE(o + 41) };
+    for (let o = 0; o + 46 <= buf.length; o += 46) {
+      const p = { pair: '0x' + buf.toString('hex', o, o + 20), coin: '0x' + buf.toString('hex', o + 20, o + 40), stock: stocks[buf.readUInt16BE(o + 40)].address, index: buf.readUInt32BE(o + 42) };
       if (isMeme(p)) S.pools.push(p);
     }
     S.scan = { from: meta.scannedFrom, to: meta.scannedTo, at: meta.updatedAt };
@@ -114,6 +165,7 @@ function loadScan() {
       S.scan.to = extra.scannedTo; S.scan.at = extra.updatedAt;
     }
   }
+  S.used = new Set(S.pools.map((p) => p.stock));
   S.mtime = mtime; S.live = null;
 }
 
@@ -190,7 +242,7 @@ async function build() {
     const price = stockUsd / coinInPool, total = supply ? toNum(supply, c.decimals) : 0, dead = burned ? toNum(burned, c.decimals) : 0;
     rows.push({
       coin: c.symbol, coinName: c.name, decimals: c.decimals, address: p.coin, pair: p.pair, index: p.index,
-      sym: s.symbol, name: s.name, ticker: s.ticker, stock: p.stock,
+      sym: s.symbol, name: s.name, nameZh: s.nameZh, ticker: s.ticker, issuer: s.issuer, stock: p.stock,
       shares, stockUsd, coinInPool, price, mcap: price * Math.max(0, total - dead),
     });
   });
@@ -204,7 +256,7 @@ async function build() {
       poolsFound: S.pools.length, holdingStock: rows.length, over100k: rows.filter((r) => r.mcap >= MIN_MCAP && r.stockUsd >= MIN_STOCK_USD).length,
       stockUsd: rows.reduce((a, r) => a + r.stockUsd, 0),
     },
-    stocks: Object.fromEntries(stocks.map((s) => [s.symbol, { address: s.address, name: s.name, nameZh: s.nameZh, ticker: s.ticker, logo: s.logo, price: prices[s.symbol]?.price || null }])),
+    stocks: Object.fromEntries(stocks.map((s) => [s.symbol, { address: s.address, name: s.name, nameZh: s.nameZh, ticker: s.ticker, issuer: s.issuer, logo: s.logo, price: prices[s.symbol]?.price || null }])),
     rows,
   };
 }

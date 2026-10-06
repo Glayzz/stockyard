@@ -1,6 +1,8 @@
 {
+ "format": 2,
+ "stocks": 534,
  "scannedFrom": 2457255,
- "scannedTo": 3357539,
- "updatedAt": "2026-10-06T19:03:46.765Z",
- "count": 202883
+ "scannedTo": 3357255,
+ "updatedAt": "2026-10-06T20:17:23.323Z",
+ "count": 219635
 }
