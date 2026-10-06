@@ -111,6 +111,7 @@ td { font: 700 15px var(--mono); }
 .coin { font: 700 16px var(--body); }
 .addr { font: 500 12px var(--mono); color: var(--muted); display: block; }
 .shares { font: 500 12px var(--mono); color: var(--muted); display: block; }
+.mini { display: none; }
 
 /* coin page */
 .back { display: inline-block; font: 700 13px var(--mono); margin-top: 8px; border-bottom: 2px solid var(--ink); }
@@ -202,6 +203,33 @@ td { font: 700 15px var(--mono); }
 
 @media (max-width: 760px) {
   .hero { grid-template-columns: 1fr; }
+  /* Company tiles become one swipeable row instead of a tall grid. */
+  .tiles { display: flex; overflow-x: auto; gap: 10px; margin: 0 -18px; padding: 4px 18px 12px; scroll-snap-type: x proximity; scrollbar-width: none; }
+  .tiles::-webkit-scrollbar { display: none; }
+  .tile { flex: 0 0 150px; scroll-snap-align: start; }
+  .bar .nav { width: 100%; }
+  .seg button { padding: 6px 10px; }
+  /* Header: brand on its own line, then status and links on one. */
+  .top { padding: 14px 0 6px; }
+  .top .nav { width: 100%; flex-wrap: nowrap; }
+  .top .nav a { padding: 6px 11px; font-size: 13px; white-space: nowrap; }
+  .live { font-size: 11px; margin-right: auto; }
+  .league .who .ava { width: 26px; height: 26px; font-size: 12px; }
+  .league td, .league th { font-size: 13px; }
+  /* On a phone the stock name moves under the coin, so stock held and market cap fit without scrolling. */
+  .league th:nth-child(3), .league td:nth-child(3), .league .addr:not(.mini) { display: none; }
+  .league .mini { display: block; }
+  .league th:first-child, .league td:first-child { width: 30px; }
+  .league th, .league td { padding: 9px 5px; }
+  .league td { font-size: 12px; }
+  .league th:first-child, .league td:first-child { padding-left: 10px; }
+  .league th:nth-child(5), .league td:nth-child(5) { padding-right: 10px; }
+  .league th { font-size: 10px; letter-spacing: 0; white-space: normal; line-height: 1.2; }
+  .league td:first-child { font-size: 14px; }
+  .league .who { gap: 7px; }
+  .league .coin { display: block; max-width: 72px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .league .shares, .league .mini { font-size: 11px; }
+  .coin { font-size: 14px; }
   .teaser { max-width: 360px; }
   .niuma { grid-template-columns: auto 1fr; }
   .niuma .ranks { grid-column: 1 / -1; }

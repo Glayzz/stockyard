@@ -71,7 +71,9 @@
 
 <script src="shared.js"></script>
 <script>
-const state = { data: null, stock: 'ALL', sort: 'stockUsd', all: false };
+const state = { data: null, stock: 'ALL', sort: 'stockUsd', all: false, moreTiles: false };
+// Companies shown as tiles before the rest fold behind a More tile.
+const TOP_TILES = 5;
 
 async function load() {
   state.data = await loadLeague();
@@ -96,23 +98,30 @@ function render() {
     .map((m) => { const s = el('span'); s.append(el('b', null, m.coin), ' holds ' + num(m.shares) + ' ' + m.name + ' shares'); return s; });
   track.replaceChildren(...items, ...items.map((n) => n.cloneNode(true)));
 
+  // One tile per company, even when it has more than one token.
   const by = {};
-  for (const m of shown) { const b = by[m.sym] ??= { sym: m.sym, name: m.name, n: 0, shares: 0, stockUsd: 0 }; b.n++; b.shares += m.shares; b.stockUsd += m.stockUsd; }
+  for (const m of shown) { const b = by[m.ticker] ??= { key: m.ticker, name: m.name, n: 0, shares: 0, stockUsd: 0 }; b.n++; b.shares += m.shares; b.stockUsd += m.stockUsd; }
   if (state.stock !== 'ALL' && !by[state.stock]) state.stock = 'ALL';
+  const companies = Object.values(by).sort((x, y) => y.stockUsd - x.stockUsd);
+  const top = state.moreTiles ? companies : companies.filter((c, i) => i < TOP_TILES || c.key === state.stock);
   const tiles = $('tiles');
   tiles.replaceChildren();
-  const tile = (key, title, value, meta) => {
-    const t = el('button', 'tile' + (state.stock === key ? ' on' : ''));
+  const tile = (title, value, meta, on, click) => {
+    const t = el('button', 'tile' + (on ? ' on' : ''));
     t.append(el('div', 's', title), el('div', 'v', value), el('div', 'm', meta));
-    t.onclick = () => { state.stock = key; render(); };
+    t.onclick = click;
     return t;
   };
-  tiles.append(tile('ALL', 'All stocks', usd(sum(shown, 'stockUsd')), shown.length + ' coins'));
-  for (const b of Object.values(by).sort((x, y) => y.stockUsd - x.stockUsd))
-    tiles.append(tile(b.sym, b.name, usd(b.stockUsd), num(b.shares) + ' shares · ' + b.n + (b.n === 1 ? ' coin' : ' coins')));
+  const choose = (key) => () => { state.stock = key; render(); };
+  tiles.append(tile('All stocks', usd(sum(shown, 'stockUsd')), shown.length.toLocaleString('en-US') + ' coins', state.stock === 'ALL', choose('ALL')));
+  for (const c of top) tiles.append(tile(c.name, usd(c.stockUsd), num(c.shares) + ' shares · ' + c.n + (c.n === 1 ? ' coin' : ' coins'), state.stock === c.key, choose(c.key)));
+  if (companies.length > top.length || state.moreTiles && companies.length > TOP_TILES) {
+    const rest = companies.length - top.length;
+    tiles.append(tile(state.moreTiles ? 'Fewer' : 'More', state.moreTiles ? '−' : '+' + rest, state.moreTiles ? 'show the top ' + TOP_TILES : 'other companies', false, () => { state.moreTiles = !state.moreTiles; render(); }));
+  }
 
-  const list = (state.stock === 'ALL' ? shown : shown.filter((m) => m.sym === state.stock)).slice().sort((a, b) => (b[state.sort] || 0) - (a[state.sort] || 0));
-  $('league-title').textContent = state.stock === 'ALL' ? 'The stock league' : 'The ' + STOCKS[state.stock][1] + ' league';
+  const list = (state.stock === 'ALL' ? shown : shown.filter((m) => m.ticker === state.stock)).slice().sort((a, b) => (b[state.sort] || 0) - (a[state.sort] || 0));
+  $('league-title').textContent = state.stock === 'ALL' ? 'The stock league' : 'The ' + by[state.stock].name + ' league';
   const body = $('rows');
   body.replaceChildren();
   if (!list.length) {
@@ -127,7 +136,7 @@ function render() {
     const coin = el('td');
     const who = el('div', 'who');
     const names = el('div');
-    names.append(el('span', 'coin', m.coin), el('span', 'addr', short(m.address)));
+    names.append(el('span', 'coin', m.coin), el('span', 'addr', short(m.address)), el('span', 'addr mini', m.name));
     who.append(avatar(m.logo, m.coin), names);
     coin.append(who);
     const stock = el('td');
@@ -135,7 +144,7 @@ function render() {
     const held = el('td', null, usd(m.stockUsd));
     held.append(el('span', 'shares', num(m.shares) + ' shares'));
     const cap = el('td', null, usd(m.mcap));
-    if (m.change24 != null) cap.append(el('span', 'shares ' + (m.change24 >= 0 ? 'up' : 'down'), pct(m.change24) + ' today'));
+    if (m.change24 != null) cap.append(el('span', 'shares ' + (m.change24 >= 0 ? 'up' : 'down'), pct(m.change24) + ' 24h'));
     tr.append(el('td', null, String(i + 1)), coin, stock, held, cap, el('td', null, m.vol24 != null ? usd(m.vol24) : '—'));
     tr.onclick = () => { location.href = 'coin.html?a=' + m.address; };
     body.append(tr);
