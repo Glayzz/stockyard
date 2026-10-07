@@ -1,5 +1,7 @@
 // Shared by every page: language, formatting, the league fetch and the wallet trade flow.
 const NIUMA = '0xc01a2e136f92772eecab15eb054e8f6fa06b7777';
+// The Stockyard agent's ERC-8004 identity on BNB Chain, and the transaction that registered it.
+const AGENT = { id: 365431, registered: '0x1d978538d858f22bf1c51e3b678f11eb3eac0e2e50bc2642358f3182f6a4c65a' };
 // The default league only lists coins at or above these; the Show all switch lifts them.
 const MIN_MCAP = 100000, MIN_STOCK_USD = 1000;
 

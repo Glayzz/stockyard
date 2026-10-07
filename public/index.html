@@ -68,6 +68,9 @@
     </table>
   </div>
   <p class="note" id="note"></p>
+
+  <h2 class="sec" data-zh="智能体也能用">Agents can use it too</h2>
+  <div class="tiles agents" id="agents"></div>
 </div>
 
 <script src="shared.js"></script>
@@ -210,6 +213,25 @@ const pick = (id, attr, apply) => {
 };
 pick('sort', 'k', (v) => { state.sort = v; });
 pick('scope', 'all', (v) => { state.all = v === '1'; });
+
+// What an agent can do with Stockyard, each tile linking to its proof.
+async function renderAgents() {
+  const paid = await getJson('/x402').catch(() => null);
+  const repo = 'https://github.com/Glayzz/stockyard/';
+  const tiles = [
+    [t('On-chain identity', '链上身份'), t('Agent ' + AGENT.id, '智能体 ' + AGENT.id), t('ERC-8004 on BNB Chain, built with BNB Agent Studio', 'BNB Chain 上的 ERC-8004，用 BNB Agent Studio 构建'), 'https://bscscan.com/tx/' + AGENT.registered],
+    [t('Paid data · x402', '付费数据 · x402'), t('$0.01 a call', '每次 $0.01'), paid?.live ? (zh ? `已通过币安 B402 结算 ${paid.earned.calls} 次` : `${paid.earned.calls} ${paid.earned.calls === 1 ? 'call' : 'calls'} settled through Binance B402`) : t('settled through Binance B402', '通过币安 B402 结算'), paid?.earned?.last ? 'https://bscscan.com/tx/' + paid.earned.last.transaction : '/x402'],
+    ['MCP', t('5 tools', '5 个工具'), t('league, coin, payslip and quotes for any agent', '排行榜、币、工资条和报价，任何智能体都能调用'), repo + 'blob/main/mcp/server.mjs'],
+    [t('Agentic Wallet skill', 'Agentic Wallet 技能'), 'SKILL.md', t('find it, explain it, then trade with Binance Agentic Wallet', '查找、解读，再用币安 Agentic Wallet 交易'), repo + 'blob/main/skills/stockyard-stock-memes/SKILL.md'],
+  ];
+  $('agents').replaceChildren(...tiles.map(([title, value, meta, href]) => {
+    const a = el('a', 'tile');
+    a.href = href; a.target = '_blank'; a.rel = 'noopener';
+    a.append(el('div', 's', title), el('div', 'v', value), el('div', 'm', meta));
+    return a;
+  }));
+}
+renderAgents();
 
 const refresh = () => load().catch((err) => {
   $('updated').textContent = t('Could not load live data: ', '无法加载实时数据：') + err.message;

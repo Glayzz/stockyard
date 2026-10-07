@@ -72,7 +72,7 @@ if (held.u < price) {
   const hash = await rpc('eth_sendRawTransaction', [signed.rawTransaction]);
   console.log('Top-up sent: https://bscscan.com/tx/' + hash);
   let done = false;
-  for (let i = 0; i < 60 && !done; i++) {
+  for (let i = 0; i < 120 && !done; i++) {
     await new Promise((r) => setTimeout(r, 1500));
     const receipt = await rpc('eth_getTransactionReceipt', [hash]).catch(() => null);
     if (!receipt) continue;

@@ -36,4 +36,7 @@ Run plainly it only shows balances and the price. With `--send` it first swaps a
 U if the wallet is short, then pays. It refuses any 402 that names a receiving address other than
 the one in Stockyard's `.env`, and never pays more than five cents a call.
 
+It has done this once on mainnet: 0.01 U for the S&P 500 league, settled by B402 in
+[this transaction](https://bscscan.com/tx/0x1c6c4e13c8d063e00bb101e632f9bdd3b8a23ce71f055ae3971ad0c2bfa1f92f).
+
 `.studio/` holds the encrypted keystore and its password and is never committed.

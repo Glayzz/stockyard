@@ -69,8 +69,8 @@ const settled = new Map();
 // Why the last payment that failed was turned down, so a buyer or the operator can see it.
 let last = null;
 const turnedDown = (step, reason, extra) => { last = { at: new Date().toISOString(), step, reason, ...extra }; console.log(`paid: ${step} turned a payment down: ${reason}`); };
-const totals = { calls: 0, usd: 0 };
-if (existsSync(LEDGER)) for (const line of readFileSync(LEDGER, 'utf8').split('\n')) { try { const e = JSON.parse(line); totals.calls++; totals.usd += Number(e.usd); } catch {} }
+const totals = { calls: 0, usd: 0, last: null };
+if (existsSync(LEDGER)) for (const line of readFileSync(LEDGER, 'utf8').split('\n')) { try { const e = JSON.parse(line); totals.calls++; totals.usd += Number(e.usd); totals.last = { at: e.at, transaction: e.transaction }; } catch {} }
 
 export async function paid(req, url) {
   const payTo = process.env.B402_PAY_TO, origin = (process.env.PUBLIC_URL || 'http://' + req.headers.host).replace(/\/$/, '');
@@ -80,7 +80,7 @@ export async function paid(req, url) {
   if (url.pathname === '/x402' || url.pathname === '/x402/') {
     return json(200, {
       x402Version: 2, facilitator: 'Binance B402', network: NETWORK, live: Boolean(payTo), payTo: payTo || null,
-      earned: { calls: totals.calls, usd: Number(totals.usd.toFixed(4)) },
+      earned: { calls: totals.calls, usd: Number(totals.usd.toFixed(4)), last: totals.last },
       resources: Object.entries(PRODUCTS).map(([path, p]) => ({ url: origin + path, method: 'GET', priceUsd: p.price, description: p.description, query: p.query })),
       how: 'Call a resource. It answers 402 with payment requirements; sign one and repeat the call with it base64-encoded in the PAYMENT-SIGNATURE header.',
     });
@@ -126,7 +126,7 @@ export async function paid(req, url) {
 
   const receipt = { success: true, transaction: done.transaction, network: done.network || NETWORK, payer: done.payer };
   settled.set(key, { at: Date.now(), body: work.json, receipt });
-  totals.calls++; totals.usd += Number(product.price);
+  totals.calls++; totals.usd += Number(product.price); totals.last = { at: new Date().toISOString(), transaction: done.transaction };
   try { appendFileSync(LEDGER, JSON.stringify({ at: new Date().toISOString(), resource: url.pathname, usd: product.price, asset: terms.asset, payer: done.payer, transaction: done.transaction }) + '\n'); } catch {}
   console.log(`paid: ${url.pathname} $${product.price} from ${done.payer} tx ${done.transaction}`);
   return json(200, work.json, { 'PAYMENT-RESPONSE': b64(receipt) });

@@ -158,6 +158,9 @@ td { font: 700 15px var(--mono); }
 .opt .m { font: 500 12px var(--mono); }
 .trade { margin-top: 14px; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
 .trade .note { margin: 0; }
+.agents { margin-bottom: 10px; }
+.agents .tile { text-decoration: none; color: inherit; display: block; }
+.agents .tile .v { font-size: 22px; }
 .steps { display: flex; gap: 6px; flex-wrap: wrap; }
 .steps span { font: 700 12px var(--mono); letter-spacing: .04em; text-transform: uppercase; padding: 5px 12px; border: 2px solid var(--ink); border-radius: 999px; background: var(--card); color: var(--muted); }
 .steps span.on { background: var(--yellow); color: var(--ink); box-shadow: 3px 3px 0 var(--ink); }

@@ -42,7 +42,11 @@ Work in progress during the hackathon build window.
 - Paid data over x402 is switched on and checked against Binance's B402 as far as verification:
   a correctly signed payment from an empty wallet is turned down only for lack of funds, and a
   tampered one for its signature. BNB Agent Studio's own x402 client reads our 402 and picks an
-  asset. The first settled payment is waiting on a funded buyer.
+  asset.
+- First settled payment: on 7 Oct 2026 the Stockyard agent paid 0.01 U for `/x402/league` from its
+  own wallet, using the Studio runtime's x402 client. Binance's B402 settled it and paid the gas, in
+  [this transaction](https://bscscan.com/tx/0x1c6c4e13c8d063e00bb101e632f9bdd3b8a23ce71f055ae3971ad0c2bfa1f92f). The agent had funded itself first by swapping BNB into U through
+  Binance's aggregator.
 - Next: host the site and the agent, and switch on the agent's paid jobs.
 
 Binance Web3 API modules in use: RWA Data, Market, Trading, Transaction, Wallet, B402 Payments.
