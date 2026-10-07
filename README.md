@@ -92,6 +92,23 @@ a public address.
 Binance checks the caller's location, so run these from a region its
 [restricted list](https://web3.binance.com/en/dev-docs/web3-api-prohibited-regions) allows.
 
+## Host it
+
+The server is one Node process with no build step, so any Node host works. `railway.json` sets it
+up for Railway: start command, and `/api/health` as the health check.
+
+- **Region matters.** Binance turns away calls from some countries, the United States and the
+  Netherlands among them, so pick a region outside its
+  [restricted list](https://web3.binance.com/en/dev-docs/web3-api-prohibited-regions). Singapore
+  works. `/api/health` says whether Binance is reachable from where the server landed.
+- **Settings to give the host:** `BINANCE_W3_API_KEY`, `BINANCE_W3_API_SECRET`, and optionally
+  `B402_PAY_TO`, `TELEGRAM_BOT_TOKEN` and `PUBLIC_URL` (the site's own address, used in the links
+  the bot and the paid routes hand out). The host supplies `PORT`.
+- **One bot per token.** The Telegram bot polls, so run it in one place only.
+- The league builds itself from `data/pools.bin` and `data/live.json` on first start. The payment
+  ledger and the bot's watch list are files under `data/`; give the host a volume there if they
+  should survive a redeploy.
+
 ## How the league finds every stock meme
 
 1. `data/bsc-stock-tokens.csv` is Binance's list of tokenized stocks on BNB Chain.
