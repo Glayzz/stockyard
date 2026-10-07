@@ -5,6 +5,7 @@ import { readFileSync, writeFileSync, existsSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { multicallAll, addrWord, word, toAddr, toNum, toText } from './chain.mjs';
 import { bw3 } from './binance.mjs';
+import { links } from './links.mjs';
 import { pairCount, scanRange } from './scan.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -226,6 +227,14 @@ async function enrich(rows) {
     }
   } catch { /* keep whatever was fetched before */ }
   for (const r of rows) Object.assign(r, S.market.get(r.address), S.logos.has(r.address) ? { logo: S.logos.get(r.address) } : null);
+  // Each listed coin's own website, X and Telegram, and its logo where Binance has none.
+  const own = await links(listed.map((r) => r.address)).catch(() => new Map());
+  for (const r of listed) {
+    const v = own.get(r.address);
+    if (!v) continue;
+    r.links = { website: v.website, x: v.x, telegram: v.telegram, dex: v.dex };
+    if (!r.logo && v.logo) r.logo = v.logo;
+  }
 }
 
 async function build() {

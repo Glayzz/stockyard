@@ -2,6 +2,7 @@
 // league; prices, history, trades, pools and the stock's company profile come from Binance.
 import { league } from './league.mjs';
 import { bw3 } from './binance.mjs';
+import { links } from './links.mjs';
 
 const C = { binanceChainId: '56' };
 const cache = new Map();
@@ -19,7 +20,8 @@ export async function coin(input) {
   const stock = lg.stocks[row.sym];
   const one = (addr) => ({ ...C, tokenContractAddress: addr });
 
-  const [info, adv, basic, pools, trades, coinBars, stockBars, rwaPrice, market, profile] = await Promise.all([
+  const [own, info, adv, basic, pools, trades, coinBars, stockBars, rwaPrice, market, profile] = await Promise.all([
+    links([address]).then((m) => m.get(address), () => null),
     safe(bw3('/api/v1/dex/market/price-info', { method: 'POST', body: [one(address)] })),
     safe(bw3('/api/v1/dex/market/token/advanced-info', { params: one(address) })),
     safe(bw3('/api/v1/dex/market/token/basic-info', { method: 'POST', params: one(address), body: {} })),
@@ -39,10 +41,13 @@ export async function coin(input) {
   const value = {
     binance: Boolean(i || trades || coinBars),
     coin: {
-      address, symbol: row.coin, name: row.coinName, decimals: row.decimals, logo: basic?.tokenLogoUrl || row.logo || null,
+      address, symbol: row.coin, name: row.coinName, decimals: row.decimals, logo: basic?.tokenLogoUrl || row.logo || own?.logo || null,
       price: row.price, mcap: row.mcap, vol24: num(i?.volume24H), holders: i?.holders ?? adv?.holders ?? null,
       change: { h1: num(i?.priceChange1H) / 100, h4: num(i?.priceChange4H) / 100, h24: num(i?.priceChange24H) / 100 },
       created: basic?.createTime || adv?.createTime || null, top10: num(adv?.top10HoldingPercent), tags: adv?.tokenTags || [],
+      // Who holds the supply, as percentages, from Binance's holder analysis.
+      held: adv ? { top10: num(adv.top10HoldingPercent), dev: num(adv.devHoldingPercent), smart: num(adv.smartMoneyHoldingPercent), snipers: num(adv.sniperHoldingPercent), bundlers: num(adv.bundlerHoldingPercent), insiders: num(adv.insiderHoldingPercent) } : null,
+      links: own ? { website: own.website, x: own.x, telegram: own.telegram, dex: own.dex } : null,
     },
     stock: {
       sym: row.sym, name: row.name, nameZh: stock?.nameZh || null, address: row.stock, logo: stock?.logo || null,

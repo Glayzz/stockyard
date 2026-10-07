@@ -38,6 +38,20 @@ const routes = {
     return { updatedAt: lg.updatedAt, totals: lg.stats, count: rows.length, memes: rows };
   },
 
+  // Coins to pick from. With no q, the listed coins by stock in their pool; with q, any coin whose
+  // symbol, name or address matches, listed ones first.
+  'GET /api/search': async (q) => {
+    const lg = await league(), text = String(q.q || '').trim().toLowerCase().slice(0, 60);
+    const listed = (r) => r.mcap >= 100000 && r.stockUsd >= 1000;
+    // One row per coin: its deepest stock pool.
+    const best = new Map();
+    for (const r of lg.rows) { const b = best.get(r.address); if (!b || r.stockUsd > b.stockUsd) best.set(r.address, r); }
+    const rows = [...best.values()]
+      .filter((r) => (text ? r.coin.toLowerCase().includes(text) || (r.coinName || '').toLowerCase().includes(text) || r.address.startsWith(text) : listed(r)))
+      .sort((a, b) => listed(b) - listed(a) || b.stockUsd - a.stockUsd).slice(0, text ? 8 : 24);
+    return { coins: rows.map((r) => ({ coin: r.coin, name: r.coinName, address: r.address, stock: r.name, stockZh: r.nameZh, logo: r.logo || null, mcap: r.mcap, stockUsd: r.stockUsd, listed: listed(r) })) };
+  },
+
   // One coin's page: pool from the chain; prices, history, trades and company profile from Binance.
   'GET /api/coin': (q) => { if (!isAddr(q.a)) throw bad('a must be a coin address'); return coin(q.a); },
 

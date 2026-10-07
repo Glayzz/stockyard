@@ -116,6 +116,38 @@ td { font: 700 15px var(--mono); }
 .mini { display: none; }
 
 /* coin page */
+.copy { font: 500 12px var(--mono); color: inherit; background: none; border: 0; border-bottom: 2px dotted var(--ink); padding: 0; cursor: pointer; }
+.copy::after { content: " ⧉"; font-size: 11px; }
+.copy:hover { background: var(--yellow); }
+.copy.done { border-bottom-style: solid; color: var(--green); }
+.copy.done::after { content: " ✓"; }
+.social { font: 700 12px var(--mono); border: 2px solid var(--ink); border-radius: 999px; padding: 2px 10px; background: var(--card); }
+.social::after { content: " ↗"; }
+.social:hover { background: var(--yellow); }
+.social.small { font-size: 10.5px; padding: 0 6px; border-width: 1.5px; }
+.social.small::after { content: ""; }
+.meta a.social { border-bottom-width: 2px; }
+.league .under { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 2px; }
+.picker { margin: 14px 0 6px; }
+.picker label { display: block; font: 700 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.find { position: relative; max-width: 560px; }
+.find input { width: 100%; background: #fff; border: var(--bd); border-radius: 12px; color: var(--ink); font: 700 15px var(--mono); padding: 10px 14px; }
+.find input:focus { outline: none; box-shadow: 4px 4px 0 var(--yellow), 4px 4px 0 2.5px var(--ink); }
+.results { position: absolute; z-index: 5; left: 0; right: 0; top: calc(100% + 6px); background: var(--card); border: var(--bd); border-radius: 12px; box-shadow: var(--sh); padding: 6px; max-height: 360px; overflow-y: auto; }
+.results .note { margin: 8px 10px; }
+.result { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 8px; }
+.result:hover, .result.on { background: var(--yellow); }
+.result .ava { width: 30px; height: 30px; font-size: 13px; flex: none; }
+.result div { flex: 1; min-width: 0; }
+.result .coin { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.result b { font: 700 13px var(--mono); }
+.chips { display: flex; gap: 8px; margin-top: 10px; overflow-x: auto; padding: 2px 2px 8px; scrollbar-width: thin; }
+.chipcoin { flex: none; display: inline-flex; align-items: center; gap: 7px; font: 700 13px var(--body); background: var(--card); border: 2px solid var(--ink); border-radius: 999px; padding: 3px 12px 3px 4px; }
+.chipcoin .ava { width: 24px; height: 24px; font-size: 11px; }
+.chipcoin:hover { background: var(--yellow); }
+.chipcoin.on { background: var(--ink); color: var(--yellow); }
+.held { display: grid; grid-template-columns: 150px 1fr 56px; gap: 12px; align-items: center; padding: 7px 0; font-size: 14px; }
+.held b { font: 700 14px var(--mono); text-align: right; }
 .back { display: inline-block; font: 700 13px var(--mono); margin-top: 8px; border-bottom: 2px solid var(--ink); }
 .title { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin: 18px 0 10px; }
 .title .ava { width: 72px; height: 72px; font-size: 30px; box-shadow: 4px 4px 0 var(--ink); }
@@ -287,6 +319,8 @@ a.link { border-bottom: 2px solid var(--ink); font-weight: 700; }
   .league th:nth-child(6), .league td:nth-child(6) { display: none; }
   th, td { padding: 10px 10px; }
   .lookup { flex-direction: column; }
+  .league .under { display: none; }
+  .held { grid-template-columns: 110px 1fr 48px; }
   .doors, .proofs { grid-template-columns: 1fr 1fr; }
   .door b { font-size: 16px; }
   /* Five destinations do not fit a phone's width, so the bar scrolls sideways and the status sits above it. */

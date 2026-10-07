@@ -56,6 +56,48 @@ function avatar(url, label) {
   return box;
 }
 
+// An address shown short. A click copies the whole thing.
+function copyable(address) {
+  const b = el('button', 'copy', short(address));
+  b.type = 'button'; b.title = t('Copy ', '复制 ') + address;
+  b.onclick = async (e) => {
+    e.stopPropagation(); e.preventDefault();
+    try { await navigator.clipboard.writeText(address); }
+    catch {
+      // Older browsers and pages without clipboard permission: copy through a hidden field.
+      const field = el('textarea');
+      field.value = address; field.style.position = 'fixed'; field.style.opacity = '0';
+      document.body.append(field); field.select();
+      let ok = false;
+      try { ok = document.execCommand('copy'); } catch {}
+      field.remove();
+      if (!ok) return;
+    }
+    b.textContent = t('Copied', '已复制'); b.classList.add('done');
+    setTimeout(() => { b.textContent = short(address); b.classList.remove('done'); }, 1200);
+  };
+  return b;
+}
+
+// A coin's own website, X and Telegram, as its team set them on DexScreener. The links were
+// checked on the server to be plain https; only fixed labels are shown, never the link's text.
+function socials(links, small) {
+  const out = [];
+  const add = (label, href) => {
+    if (!href) return;
+    const a = el('a', 'social' + (small ? ' small' : ''), label);
+    a.href = href; a.target = '_blank'; a.rel = 'noopener nofollow';
+    a.onclick = (e) => e.stopPropagation();
+    out.push(a);
+  };
+  if (!links) return out;
+  add(t('Website', '官网'), links.website);
+  add('X', links.x);
+  add('Telegram', links.telegram);
+  if (!small) add('DexScreener', links.dex);
+  return out;
+}
+
 // Every stock-paired pool that holds stock, read from the chain by our own server.
 const loadLeague = () => getJson('/api/league');
 

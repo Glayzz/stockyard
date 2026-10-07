@@ -23,7 +23,14 @@
       <button class="lang" id="lang" type="button">中文</button>
     </nav>
   </div>
-  <a class="back" href="index.html" data-zh="← 全部股票 Meme">← All stock memes</a>
+  <div class="picker">
+    <label for="find" data-zh="选一个币来交易">Pick a coin to trade</label>
+    <div class="find">
+      <input id="find" placeholder="Search a coin, or paste its contract address" data-zh-placeholder="搜索币名，或粘贴合约地址" autocomplete="off" spellcheck="false">
+      <div class="results" id="results" hidden></div>
+    </div>
+    <div class="chips" id="chips"></div>
+  </div>
 
   <div id="page" hidden>
     <p class="offline" id="offline" hidden data-zh="暂时连不上币安，所以价格历史、成交、报价和股票资料先不显示。下面的池子数据直接读自 BNB Chain，仍然是最新的。">Binance cannot be reached right now, so price history, trades, quotes and the stock's profile are missing. The pool numbers below are read straight from BNB Chain and are still current.</p>
@@ -76,7 +83,16 @@
       </div>
     </div>
 
+    <div id="held-wrap" hidden>
+      <h2 class="sec" data-zh="谁持有这个币">Who holds it</h2>
+      <div class="card">
+        <div id="held"></div>
+        <p class="note" data-zh="占总供应量的百分比，来自币安的持有人分析。各类之间可能有重叠。">Share of the supply, from Binance's holder analysis. The groups can overlap.</p>
+      </div>
+    </div>
+
     <h2 class="sec" data-zh="这个币在哪里交易">Where this coin trades</h2>
+    <p class="note" id="pool-addr" style="margin-top:-6px"></p>
     <div class="tablewrap">
       <table class="pools">
         <thead><tr><th data-zh="配对资产">Trades against</th><th data-zh="流动性">Liquidity</th><th data-zh="流动性占比">Share of liquidity</th></tr></thead>
@@ -140,7 +156,7 @@ function renderHead() {
   const chip = el('span', 'chip');
   chip.id = 'chg';
   $('title').replaceChildren(avatar(coin.logo, coin.symbol), el('h1', null, coin.symbol), el('span', 'price', usd(coin.price)), chip);
-  const meta = [el('span', 'pill', t('Trades against ', '配对：') + stockName(stock)), el('span', null, short(addr)), link('BscScan', 'https://bscscan.com/token/' + addr), link(t('Pool', '池子'), 'https://bscscan.com/address/' + pool.pair)];
+  const meta = [el('span', 'pill', t('Trades against ', '配对：') + stockName(stock)), copyable(addr), ...socials(coin.links), link('BscScan', 'https://bscscan.com/token/' + addr)];
   if (coin.created) meta.push(el('span', null, t('Launched ', '上线于 ') + new Date(coin.created).toLocaleDateString(dateLocale, { day: 'numeric', month: 'short', year: 'numeric' })));
   $('meta').replaceChildren(...meta);
   const allLiq = pools.reduce((a, x) => a + x.usd, 0), stockLiq = pools.filter((x) => x.isStock).reduce((a, x) => a + x.usd, 0);
@@ -152,6 +168,19 @@ function renderHead() {
   if (allLiq) stats.append(stat(t('Liquidity against stock', '股票池占流动性'), Math.round(stockLiq / allLiq * 100) + '%', t(usd(allLiq) + ' in all pools', '全部池子共 ' + usd(allLiq))));
   if (coin.holders) stats.append(stat(t('Holders', '持有人'), coin.holders.toLocaleString('en-US'), coin.top10 ? t('top 10 hold ', '前10名持有 ') + coin.top10.toFixed(0) + '%' : null));
   if (S.sellTax != null) stats.append(stat(t('Coin tax', '交易税'), (S.buyTax * 100).toFixed(1) + '% / ' + (S.sellTax * 100).toFixed(1) + '%', t('on buys / on sells', '买入 / 卖出')));
+
+  // Who holds the supply, from Binance's holder analysis. Shown only when Binance has it.
+  const h = coin.held, who = $('held');
+  const shares = h ? [[t('Top 10 wallets', '前10个钱包'), h.top10], [t('The developer', '开发者'), h.dev], [t('Smart money', '聪明钱'), h.smart], [t('Snipers', '狙击手'), h.snipers], [t('Bundlers', '捆绑钱包'), h.bundlers], [t('Insiders', '内部人'), h.insiders]].filter((x) => x[1] != null) : [];
+  $('held-wrap').hidden = !shares.length;
+  who.replaceChildren(...shares.map(([k, v]) => {
+    const row = el('div', 'held'), bar = el('div', 'meter'), fill = el('i');
+    fill.style.width = Math.min(100, v).toFixed(1) + '%';
+    bar.append(fill);
+    row.append(el('span', null, k), bar, el('b', null, v.toFixed(v < 10 ? 1 : 0) + '%'));
+    return row;
+  }));
+  $('pool-addr').replaceChildren(t('Pool ', '池子 '), copyable(pool.pair), ' · ', t(stockName(stock) + ' token ', stockName(stock) + ' 代币 '), copyable(stock.address));
 
   const rows = $('pools');
   rows.replaceChildren();
@@ -373,6 +402,7 @@ async function init() {
   if (!/^0x[0-9a-f]{40}$/.test(addr)) return fail('That is not a valid coin address.');
   try { await loadCoin(); } catch (err) { return fail(err.message); }
   $('state').hidden = true; $('page').hidden = false;
+  showCurrent();
   // A link can open the page on one side with an amount filled in, e.g. from the Telegram bot.
   const asked = new URLSearchParams(location.search), amount = /^\d+(\.\d+)?$/.test(asked.get('amount') || '') ? asked.get('amount') : null;
   if (asked.get('side') === 'buy') { typed.buy = amount; $('side').querySelector('[data-s=buy]').click(); }
@@ -390,6 +420,54 @@ $('win').onclick = (e) => {
   renderMove();
 };
 $('amount').oninput = queueQuotes;
+
+// The picker: the listed coins as chips, and a search over every coin with a stock pool.
+const coinRow = (c) => {
+  const a = el('a', 'result' + (c.address === addr ? ' on' : ''));
+  a.href = 'coin.html?a=' + c.address;
+  const names = el('div');
+  names.append(el('span', 'coin', c.coin), el('span', 'addr', (zh && c.stockZh) || c.stock));
+  a.append(avatar(c.logo, c.coin), names, el('b', null, usd(c.mcap)));
+  return a;
+};
+const chip = (c) => {
+  const a = el('a', 'chipcoin' + (c.address === addr ? ' on' : ''));
+  a.href = 'coin.html?a=' + c.address;
+  a.append(avatar(c.logo, c.coin), el('span', null, c.coin));
+  return a;
+};
+// The coin on the page always leads the row, whether or not it is one of the listed ones.
+function showCurrent() {
+  if (!S.d || !$('chips').children.length || $('chips').querySelector('.on')) return;
+  $('chips').prepend(chip({ address: addr, coin: S.d.coin.symbol, logo: S.d.coin.logo }));
+}
+async function loadChips() {
+  const { coins } = await getJson('/api/search');
+  const mine = coins.find((c) => c.address === addr);
+  $('chips').replaceChildren(...(mine ? [mine, ...coins.filter((c) => c !== mine)] : coins).map(chip));
+  showCurrent();
+}
+let findTimer = null, findRun = 0;
+$('find').oninput = () => {
+  clearTimeout(findTimer);
+  const q = $('find').value.trim();
+  if (!q) { $('results').hidden = true; return; }
+  findTimer = setTimeout(async () => {
+    const run = ++findRun;
+    const { coins } = await getJson('/api/search?q=' + encodeURIComponent(q)).catch(() => ({ coins: [] }));
+    if (run !== findRun) return;
+    $('results').replaceChildren(...(coins.length ? coins.map(coinRow) : [el('p', 'note', t('No stock meme matches that.', '没有匹配的股票 Meme。'))]));
+    $('results').hidden = false;
+  }, 180);
+};
+$('find').onkeydown = (e) => {
+  if (e.key !== 'Enter') return;
+  const q = $('find').value.trim().toLowerCase(), first = $('results').querySelector('a');
+  if (/^0x[0-9a-f]{40}$/.test(q)) location.href = 'coin.html?a=' + q;
+  else if (first) location.href = first.href;
+};
+document.addEventListener('click', (e) => { if (!e.target.closest('.find')) $('results').hidden = true; });
+loadChips().catch(() => {});
 init();
 </script>
 </body>

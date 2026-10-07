@@ -178,7 +178,9 @@ function render() {
     const coin = el('td');
     const who = el('div', 'who');
     const names = el('div');
-    names.append(el('span', 'coin', m.coin), el('span', 'addr', short(m.address)), el('span', 'addr mini', stockName(m)));
+    const under = el('span', 'addr under');
+    under.append(copyable(m.address), ...socials(m.links, true));
+    names.append(el('span', 'coin', m.coin), under, el('span', 'addr mini', stockName(m)));
     who.append(avatar(m.logo, m.coin), names);
     coin.append(who);
     const stock = el('td');
