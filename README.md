@@ -19,7 +19,7 @@ worth $100K or more. Some pay their holders in stock. Until now there was no too
 | `mcp/server.mjs` | The same data as five MCP tools for any agent. |
 | `server/paid.mjs` · `/x402` | The same data sold to agents per call over x402, settled through Binance's B402: one cent for the league or a coin, two for a payslip. `GET /x402` is the free catalogue. Each settled call also lists the resource in B402's Bazaar. |
 | `scripts/x402-buy.mjs` | An agent paying for that data with no SDK: about 150 lines that take the 402, sign an EIP-3009 authorization and call again. The buyer needs no BNB. |
-| `server/telegram.mjs` | A Telegram bot: paste a wallet for its payslip, `/league`, `/coin`, `/sell` and `/buy` quotes, and `/watch` for a message each time the wallet is paid in stock. English and 中文. It never holds a key. |
+| `server/telegram.mjs` | A Telegram bot driven by buttons: a wallet's payslip sent as the same image the site prints, the league by company, a coin's card with its meme-versus-stock split, a price check (what a sale or a buy would give right now), and payday alerts with the updated slip. English and 中文. It holds no key and cannot trade. |
 
 ## Status
 
@@ -38,7 +38,8 @@ Binance Web3 API modules in use: RWA Data, Market, Trading, Transaction, Wallet,
 
 ## Run it
 
-Needs Node 22 or newer and no packages.
+Needs Node 22 or newer. The site and API run with no packages; `npm install` adds one optional
+library the Telegram bot uses to draw the payslip image (without it the bot answers in text).
 
 ```bash
 node server/dev.mjs

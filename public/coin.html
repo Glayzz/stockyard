@@ -368,6 +368,10 @@ async function init() {
   if (!/^0x[0-9a-f]{40}$/.test(addr)) return fail('That is not a valid coin address.');
   try { await loadCoin(); } catch (err) { return fail(err.message); }
   $('state').hidden = true; $('page').hidden = false;
+  // A link can open the page on one side with an amount filled in, e.g. from the Telegram bot.
+  const asked = new URLSearchParams(location.search), amount = /^\d+(\.\d+)?$/.test(asked.get('amount') || '') ? asked.get('amount') : null;
+  if (asked.get('side') === 'buy') { typed.buy = amount; $('side').querySelector('[data-s=buy]').click(); }
+  else if (amount) $('amount').value = amount;
   renderAll(); renderSell(); loadQuotes();
   loadSafety().then(() => { renderHead(); renderMove(); renderSell(); });
   setInterval(async () => { try { await loadCoin(); renderAll(); } catch {} }, 30000);

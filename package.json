@@ -4,11 +4,16 @@
   "description": "The home for stock memes on BNB Chain: league, coin breakdown, payslip and keep-the-stock trades.",
   "private": true,
   "license": "MIT",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "start": "node server/dev.mjs",
     "scan": "node scripts/scan-pairs.mjs",
     "pack": "node scripts/pack-pools.mjs",
     "mcp": "node mcp/server.mjs"
+  },
+  "optionalDependencies": {
+    "@napi-rs/canvas": "^1.0.10"
   }
 }
