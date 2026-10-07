@@ -4,6 +4,7 @@ import { league } from './league.mjs';
 import { payslip } from './payslip.mjs';
 import { coin } from './coin.mjs';
 import { prepare, status } from './swap.mjs';
+import { status as parts } from './status.mjs';
 
 const CHAIN = '56';
 const isAddr = (a) => /^0x[0-9a-fA-F]{40}$/.test(a || '');
@@ -14,6 +15,8 @@ const routes = {
   'GET /api/health': async () => ({
     ok: true,
     binance: await bw3('/api/v1/dex/market/supported/chain').then(() => 'reachable', (e) => 'unreachable: ' + e.message),
+    telegram: parts.telegram ? { bot: parts.telegram, lastPolled: parts.telegramPolledAt } : 'off',
+    paidData: process.env.B402_PAY_TO ? 'on' : 'off',
   }),
 
   // Every stock-paired pool that holds stock, read from the chain. Cached for two minutes.

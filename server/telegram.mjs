@@ -4,6 +4,7 @@
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { handle } from './routes.mjs';
+import { status } from './status.mjs';
 
 const STATE = fileURLToPath(new URL('../data/telegram.json', import.meta.url));
 const USDT = '0x55d398326f99059ff775485246999027b3197955';
@@ -303,14 +304,27 @@ export async function startTelegram() {
   try {
     const me = await tg('getMe');
     console.log('Telegram bot @' + me.username + ' is listening');
+    status.telegram = '@' + me.username;
     await tg('setMyCommands', { commands: commands(false) });
     await tg('setMyCommands', { commands: commands(true), language_code: 'zh' });
+    // What a new user reads before pressing Start, and the line on the bot's profile.
+    await tg('setMyDescription', { description: [
+      'Stock memes are meme coins on BNB Chain that trade against a tokenized stock, and some pay their holders in that stock.', '',
+      'Paste a wallet to print its 牛马工资条 payslip, browse the league, get quotes, and be told on payday. This bot never holds a key and never trades.',
+    ].join('\n') });
+    await tg('setMyDescription', { language_code: 'zh', description: [
+      '股票 Meme 是 BNB Chain 上与代币化股票配对交易的 Meme 币，其中一些会用这只股票给持有人分红。', '',
+      '粘贴钱包地址打印牛马工资条，查看排行榜、获取报价，发薪时收到提醒。本机器人不持有任何私钥，也不会交易。',
+    ].join('\n') });
+    await tg('setMyShortDescription', { short_description: 'Payslips, league and payday alerts for stock memes on BNB Chain. Holds no keys.' });
+    await tg('setMyShortDescription', { language_code: 'zh', short_description: 'BNB Chain 股票 Meme 的工资条、排行榜和发薪提醒。不持有私钥。' });
   } catch (err) { console.log('Telegram bot did not start:', err.message); return; }
 
   setInterval(() => payday().catch(() => {}), 300000).unref();
   for (;;) {
     try {
       const updates = await tg('getUpdates', { offset: state.offset, timeout: 25, allowed_updates: ['message', 'callback_query'] });
+      status.telegramPolledAt = new Date().toISOString();
       for (const u of updates) { state.offset = u.update_id + 1; onUpdate(u); }
       if (updates.length) save();
     } catch (err) {
