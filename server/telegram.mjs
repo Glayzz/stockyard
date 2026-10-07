@@ -305,6 +305,11 @@ export async function startTelegram() {
     const me = await tg('getMe');
     console.log('Telegram bot @' + me.username + ' is listening');
     status.telegram = '@' + me.username;
+  } catch (err) { console.log('Telegram bot did not start:', err.message); return; }
+
+  // The command menu and profile texts are set in the background, so a slow or failed call there
+  // never keeps the bot from answering.
+  (async () => {
     await tg('setMyCommands', { commands: commands(false) });
     await tg('setMyCommands', { commands: commands(true), language_code: 'zh' });
     // What a new user reads before pressing Start, and the line on the bot's profile.
@@ -318,7 +323,7 @@ export async function startTelegram() {
     ].join('\n') });
     await tg('setMyShortDescription', { short_description: 'Payslips, league and payday alerts for stock memes on BNB Chain. Holds no keys.' });
     await tg('setMyShortDescription', { language_code: 'zh', short_description: 'BNB Chain 股票 Meme 的工资条、排行榜和发薪提醒。不持有私钥。' });
-  } catch (err) { console.log('Telegram bot did not start:', err.message); return; }
+  })().catch((err) => console.log('Telegram profile setup:', err.message));
 
   setInterval(() => payday().catch(() => {}), 300000).unref();
   for (;;) {
