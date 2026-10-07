@@ -158,9 +158,22 @@ td { font: 700 15px var(--mono); }
 .opt .m { font: 500 12px var(--mono); }
 .trade { margin-top: 14px; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
 .trade .note { margin: 0; }
-.agents { margin-bottom: 10px; }
-.agents .tile { text-decoration: none; color: inherit; display: block; }
-.agents .tile .v { font-size: 22px; }
+.doors { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.door { position: relative; display: flex; flex-direction: column; gap: 6px; background: var(--card); border: var(--bd); border-radius: var(--r); box-shadow: var(--sh); padding: 16px 16px 18px; transition: transform .08s, box-shadow .08s; }
+.door:hover { transform: translate(-2px, -2px); box-shadow: 7px 7px 0 var(--ink); background: var(--yellow); }
+.door .n { font: 400 15px var(--display); width: 30px; height: 30px; display: grid; place-content: center; background: var(--ink); color: var(--yellow); border-radius: 8px; }
+.door b { font: 400 18px/1.2 var(--display); }
+.door span:last-child { font-size: 14px; color: var(--muted); }
+.door:hover span:last-child { color: var(--ink); }
+pre.code { background: var(--ink); color: var(--paper); border-radius: 12px; padding: 12px 14px; margin: 14px 0 0; font: 500 12.5px/1.6 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+a.link { border-bottom: 2px solid var(--ink); font-weight: 700; }
+.proofs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.proofs .tile { display: block; }
+.proofs .tile .v { font-size: 22px; overflow-wrap: anywhere; }
+.proofs .tile .m { display: block; margin-top: 4px; }
+.price { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 11px 0; border-top: 2px dashed var(--soft); }
+.price .addr { white-space: normal; margin-top: 2px; }
+.price b { font: 700 16px var(--mono); flex: none; }
 .steps { display: flex; gap: 6px; flex-wrap: wrap; }
 .steps span { font: 700 12px var(--mono); letter-spacing: .04em; text-transform: uppercase; padding: 5px 12px; border: 2px solid var(--ink); border-radius: 999px; background: var(--card); color: var(--muted); }
 .steps span.on { background: var(--yellow); color: var(--ink); box-shadow: 3px 3px 0 var(--ink); }
@@ -274,6 +287,12 @@ td { font: 700 15px var(--mono); }
   .league th:nth-child(6), .league td:nth-child(6) { display: none; }
   th, td { padding: 10px 10px; }
   .lookup { flex-direction: column; }
+  .doors, .proofs { grid-template-columns: 1fr 1fr; }
+  .door b { font-size: 16px; }
+  /* Five destinations do not fit a phone's width, so the bar scrolls sideways and the status sits above it. */
+  .top .nav { flex-wrap: wrap; row-gap: 8px; }
+  .top .nav .live { flex-basis: 100%; }
+  .top .nav a, .top .nav .lang { flex: none; }
   .re-row { grid-template-columns: minmax(0, 1fr) auto; row-gap: 6px; }
   .re-arrow { display: none; }
   .re-row .btn { grid-column: 2; grid-row: 1 / span 2; }

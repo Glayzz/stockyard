@@ -15,6 +15,7 @@ worth $100K or more. Some pay their holders in stock. Until now there was no too
 | `public/index.html` · League | Every stock meme, ranked by how much real stock sits in its pool, by company. |
 | `public/coin.html` · Coin | Why a coin's price moved (meme leg vs stock leg), the stock behind it (token price against the real share, 52-week range), real Binance quotes for selling into the stock or into cash and for buying with the stock or with cash, the trade itself with a dry run first, and live trades through the pool. |
 | `public/payslip.html` · 牛马工资条 | Paste a wallet, print a payslip of every payout it has received in stock tokens, with dates, and the stock memes behind them. Save it as an image. Then put the pay to work: swap part of each stock line back into the coin behind it, or gather small lines into one stock, with a Binance quote and a dry run first. |
+| `public/agents.html` · Agents | What an agent can do with Stockyard, each item linked to its on-chain proof: the agent's identity, a settled paid call, the agent funding itself, and a live stock trade. |
 | `skills/stockyard-stock-memes` | A skill in the Binance Skills Hub format that hands execution to Binance Agentic Wallet. |
 | `mcp/server.mjs` | The same data as five MCP tools for any agent. |
 | `server/paid.mjs` · `/x402` | The same data sold to agents per call over x402, settled through Binance's B402: one cent for the league or a coin, two for a payslip. `GET /x402` is the free catalogue. Each settled call also lists the resource in B402's Bazaar. |

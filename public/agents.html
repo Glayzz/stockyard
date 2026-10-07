@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stockyard · For agents</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=JetBrains+Mono:wght@500;700&family=Noto+Sans+SC:wght@500;900&family=Space+Grotesk:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <a class="brand" href="index.html">STOCKYARD <small>牛马</small></a>
+    <nav class="nav">
+      <a href="index.html" data-zh="排行榜">League</a>
+      <a href="coin.html" data-zh="交易">Trade</a>
+      <a class="cta" href="payslip.html" data-zh="工资条">工资条 Payslip</a>
+      <a class="on" href="agents.html" data-zh="智能体">Agents</a>
+      <a href="https://t.me/Stockyard_PayslipBot" target="_blank" rel="noopener" data-zh="机器人 ↗">Bot ↗</a>
+      <button class="lang" id="lang" type="button">中文</button>
+    </nav>
+  </div>
+
+  <section class="pay">
+    <span class="kicker" data-zh="给 AI 智能体">For AI agents</span>
+    <h2 data-zh="智能体可以读它、雇它、付钱给它。">Agents can read it, hire it and pay it.</h2>
+    <p data-zh="Stockyard 的每一项数据，智能体都能直接拿到：免费的工具、按次付费的接口，还有一个有链上身份的 Stockyard 智能体。下面每一项都附有链上证明。">Everything Stockyard shows a person, an agent can get directly: free tools, pay-per-call data, and a Stockyard agent with its own on-chain identity. Each one below links to its proof on BNB Chain.</p>
+  </section>
+
+  <h2 class="sec" data-zh="已经在链上发生的事">What has already happened on-chain</h2>
+  <div class="proofs" id="proof"></div>
+
+  <div class="two">
+    <div>
+      <h2 class="sec" data-zh="按次付费的数据 · x402">Pay-per-call data · x402</h2>
+      <div class="card">
+        <p class="story" data-zh="不带付款的请求会收到 HTTP 402 和价格。签好一笔付款再请求一次，币安 B402 负责结算并代付 gas，钱直接进卖家的钱包。">A call without a payment gets HTTP 402 and the price. Sign a payment and call again; Binance's B402 settles it and pays the gas, and the money goes straight to the seller's wallet.</p>
+        <div id="prices"></div>
+        <pre class="code" id="curl"></pre>
+        <p class="note" id="earned"></p>
+      </div>
+    </div>
+    <div>
+      <h2 class="sec" data-zh="免费工具 · MCP">Free tools · MCP</h2>
+      <div class="card">
+        <p class="story" data-zh="五个只读工具，任何支持 MCP 的智能体都能接入：排行榜、单个币、工资条、卖出报价、用股票买入的报价。">Five read-only tools for any agent that speaks MCP: the league, one coin, a payslip, a sell quote and a buy-with-stock quote.</p>
+        <pre class="code">STOCKYARD_URL=<span id="origin1"></span> node mcp/server.mjs</pre>
+        <p class="note"><a class="link" href="https://github.com/Glayzz/stockyard/blob/main/mcp/server.mjs" target="_blank" rel="noopener" data-zh="查看工具源码 ↗">See the tools' source ↗</a></p>
+      </div>
+      <h2 class="sec" data-zh="用币安 Agentic Wallet 交易">Trade with Binance Agentic Wallet</h2>
+      <div class="card">
+        <p class="story" data-zh="一份币安 Skills Hub 格式的技能：先查找和解读股票 Meme，再把成交交给币安 Agentic Wallet。技能本身从不签名。">A skill in the Binance Skills Hub format: find and explain a stock meme, then hand the trade to Binance Agentic Wallet. The skill itself never signs.</p>
+        <p class="note"><a class="link" href="https://github.com/Glayzz/stockyard/blob/main/skills/stockyard-stock-memes/SKILL.md" target="_blank" rel="noopener" data-zh="阅读 SKILL.md ↗">Read SKILL.md ↗</a></p>
+      </div>
+    </div>
+  </div>
+
+  <h2 class="sec" data-zh="Stockyard 智能体">The Stockyard agent</h2>
+  <div class="card">
+    <p class="story" data-zh="用 BNB Agent Studio 搭建，在 BNB Chain 上注册了 ERC-8004 身份。问它一个钱包、一个币或一只股票，它就写出对应的报告。它的工作是固定代码，没有大模型，所以无法被话术带偏。它也用自己的钱包为数据付过费。">Built with BNB Agent Studio and registered on BNB Chain with an ERC-8004 identity. Ask it about a wallet, a coin or a stock and it writes the matching report. Its work is fixed code with no language model inside, so it cannot be talked into anything else. It has also paid for data from its own wallet.</p>
+    <div class="stats" id="agent"></div>
+    <p class="note"><a class="link" href="https://github.com/Glayzz/stockyard/tree/main/stockyardagent" target="_blank" rel="noopener" data-zh="智能体的代码和运行方法 ↗">The agent's code and how to run it ↗</a></p>
+  </div>
+
+  <p class="note" data-zh="这里的一切都不持有用户的私钥。付款由买方自己的钱包签名，成交由用户自己的钱包或币安 Agentic Wallet 签名。">Nothing here holds a user's key. Payments are signed by the buyer's own wallet, and trades by the user's own wallet or by Binance Agentic Wallet.</p>
+</div>
+
+<script src="shared.js"></script>
+<script>
+initLang();
+const tx = (hash) => 'https://bscscan.com/tx/' + hash;
+const tile = (title, value, meta, href) => {
+  const a = el('a', 'tile');
+  a.href = href; a.target = '_blank'; a.rel = 'noopener';
+  a.append(el('div', 's', title), el('div', 'v', value), el('div', 'm', meta));
+  return a;
+};
+const stat = (k, v, m) => { const s = el('div', 'stat'); s.append(el('div', 'k', k), el('div', 'v', v)); if (m) s.append(el('div', 'm', m)); return s; };
+
+async function render() {
+  const paid = await getJson('/x402').catch(() => null);
+  const calls = paid?.earned?.calls || 0;
+  $('proof').replaceChildren(
+    tile(t('On-chain identity', '链上身份'), t('Agent ' + AGENT.id, '智能体 ' + AGENT.id), t('registered on BNB Chain under ERC-8004', '在 BNB Chain 上按 ERC-8004 注册'), tx(AGENT.registered)),
+    tile(t('A paid call, settled', '一次付费调用，已结算'), '0.01 U', t('the agent paid for data; Binance B402 settled it and paid the gas', '智能体为数据付费，币安 B402 结算并代付 gas'), tx(paid?.earned?.last?.transaction || PROOF.paid)),
+    tile(t('An agent funding itself', '智能体自己筹资'), 'BNB → U', t('swapped through Binance\'s aggregator from its own wallet', '用自己的钱包通过币安聚合器兑换'), tx(PROOF.topUp)),
+    tile(t('A live stock trade', '一笔真实的股票交易'), 'NIUMA → S&P 500', t('sold through the coin page, kept as tokenized stock', '在币页面卖出，留下代币化股票'), tx(PROOF.trade)));
+
+  if (paid) {
+    $('prices').replaceChildren(...paid.resources.map((r) => {
+      const row = el('div', 'price'), name = el('div');
+      name.append(el('span', 'coin', new URL(r.url).pathname), el('span', 'addr', r.description));
+      row.append(name, el('b', null, '$' + r.priceUsd));
+      return row;
+    }));
+    $('earned').textContent = paid.live
+      ? (zh ? `已通过币安 B402 结算 ${calls} 次调用，共 $${paid.earned.usd}。收款地址 ${short(paid.payTo)}。` : `${calls} ${calls === 1 ? 'call' : 'calls'} settled through Binance B402 so far, $${paid.earned.usd} in all. Paid to ${short(paid.payTo)}.`)
+      : t('Paid data is switched off on this server.', '这台服务器没有开启付费数据。');
+  }
+  $('curl').textContent = `curl -i "${location.origin}/x402/league?stock=SPY"\n# HTTP/1.1 402 Payment Required\n# then repeat with the signed payment in a PAYMENT-SIGNATURE header`;
+  $('origin1').textContent = location.origin;
+  $('agent').replaceChildren(
+    stat(t('Identity', '身份'), 'ERC-8004 #' + AGENT.id, t('BNB Chain mainnet', 'BNB Chain 主网')),
+    stat(t('Wallet', '钱包'), short(AGENT.wallet), t('its own, signs its payments', '它自己的，为付款签名')),
+    stat(t('Speaks', '协议'), 'A2A · MCP', t('agent card and tools', '智能体名片和工具')),
+    stat(t('Its work', '它的工作'), t('3 reports', '3 种报告'), t('payslip, coin, league', '工资条、币、排行榜')));
+}
+render();
+</script>
+</body>
+</html>

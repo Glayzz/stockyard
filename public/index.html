@@ -16,7 +16,10 @@
     <nav class="nav">
       <span class="live"><span class="dot"></span><span id="updated" data-zh="正在加载实时数据">Loading live data</span></span>
       <a class="on" href="index.html" data-zh="排行榜">League</a>
+      <a href="coin.html" data-zh="交易">Trade</a>
       <a class="cta" href="payslip.html" data-zh="工资条">工资条 Payslip</a>
+      <a href="agents.html" data-zh="智能体">Agents</a>
+      <a href="https://t.me/Stockyard_PayslipBot" target="_blank" rel="noopener" data-zh="机器人 ↗">Bot ↗</a>
       <button class="lang" id="lang" type="button">中文</button>
     </nav>
   </div>
@@ -44,6 +47,30 @@
 
   <a class="niuma" id="niuma" hidden></a>
 
+  <h2 class="sec" data-zh="在这里可以做什么">What you can do here</h2>
+  <div class="doors">
+    <a class="door" href="coin.html">
+      <span class="n">1</span>
+      <b data-zh="用股票直接买卖 Meme">Trade a meme against its stock</b>
+      <span data-zh="卖出 Meme，留下股票；或者用股票买入。一键完成，附成交回执。">Sell a meme and keep the stock, or buy with stock. One button, with a receipt.</span>
+    </a>
+    <a class="door" href="payslip.html">
+      <span class="n">2</span>
+      <b data-zh="打印你的牛马工资条">Print your 牛马工资条 payslip</b>
+      <span data-zh="看你的 Meme 用股票给你发了多少工资，再把工资继续投出去。">See what your memes have paid you in stock, then put that pay back to work.</span>
+    </a>
+    <a class="door" href="https://t.me/Stockyard_PayslipBot" target="_blank" rel="noopener">
+      <span class="n">3</span>
+      <b data-zh="在 Telegram 收到发薪提醒">Get payday alerts on Telegram</b>
+      <span data-zh="钱包一收到股票分红，机器人就把最新工资条发给你。">The bot sends your updated payslip the moment a wallet is paid in stock.</span>
+    </a>
+    <a class="door" href="agents.html">
+      <span class="n">4</span>
+      <b data-zh="接入你的 AI 智能体">Plug in your AI agent</b>
+      <span data-zh="免费工具、按次付费的数据，以及一个有链上身份的 Stockyard 智能体。">Free tools, pay-per-call data, and a Stockyard agent with an on-chain identity.</span>
+    </a>
+  </div>
+
   <h2 class="sec" data-zh="Meme 池持有的股票">Stock held by meme pools</h2>
   <div class="tiles" id="tiles"></div>
 
@@ -69,8 +96,6 @@
   </div>
   <p class="note" id="note"></p>
 
-  <h2 class="sec" data-zh="智能体也能用">Agents can use it too</h2>
-  <div class="tiles agents" id="agents"></div>
 </div>
 
 <script src="shared.js"></script>
@@ -213,25 +238,6 @@ const pick = (id, attr, apply) => {
 };
 pick('sort', 'k', (v) => { state.sort = v; });
 pick('scope', 'all', (v) => { state.all = v === '1'; });
-
-// What an agent can do with Stockyard, each tile linking to its proof.
-async function renderAgents() {
-  const paid = await getJson('/x402').catch(() => null);
-  const repo = 'https://github.com/Glayzz/stockyard/';
-  const tiles = [
-    [t('On-chain identity', '链上身份'), t('Agent ' + AGENT.id, '智能体 ' + AGENT.id), t('ERC-8004 on BNB Chain, built with BNB Agent Studio', 'BNB Chain 上的 ERC-8004，用 BNB Agent Studio 构建'), 'https://bscscan.com/tx/' + AGENT.registered],
-    [t('Paid data · x402', '付费数据 · x402'), t('$0.01 a call', '每次 $0.01'), paid?.live ? (zh ? `已通过币安 B402 结算 ${paid.earned.calls} 次` : `${paid.earned.calls} ${paid.earned.calls === 1 ? 'call' : 'calls'} settled through Binance B402`) : t('settled through Binance B402', '通过币安 B402 结算'), paid?.earned?.last ? 'https://bscscan.com/tx/' + paid.earned.last.transaction : '/x402'],
-    ['MCP', t('5 tools', '5 个工具'), t('league, coin, payslip and quotes for any agent', '排行榜、币、工资条和报价，任何智能体都能调用'), repo + 'blob/main/mcp/server.mjs'],
-    [t('Agentic Wallet skill', 'Agentic Wallet 技能'), 'SKILL.md', t('find it, explain it, then trade with Binance Agentic Wallet', '查找、解读，再用币安 Agentic Wallet 交易'), repo + 'blob/main/skills/stockyard-stock-memes/SKILL.md'],
-  ];
-  $('agents').replaceChildren(...tiles.map(([title, value, meta, href]) => {
-    const a = el('a', 'tile');
-    a.href = href; a.target = '_blank'; a.rel = 'noopener';
-    a.append(el('div', 's', title), el('div', 'v', value), el('div', 'm', meta));
-    return a;
-  }));
-}
-renderAgents();
 
 const refresh = () => load().catch((err) => {
   $('updated').textContent = t('Could not load live data: ', '无法加载实时数据：') + err.message;
