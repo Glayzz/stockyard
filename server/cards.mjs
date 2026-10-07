@@ -72,7 +72,7 @@ export async function homeImage(stats, listed, zh) {
 }
 
 // The league: ten coins ranked by the stock sitting in their pool.
-export async function leagueImage(rows, { title, total }, zh) {
+export async function leagueImage(rows, { title, total, start = 0 }, zh) {
   const lib = await canvasKit();
   if (!lib) return null;
   const t = (en, cn) => (zh ? cn : en), rowH = 104, top = 318;
@@ -83,14 +83,15 @@ export async function leagueImage(rows, { title, total }, zh) {
   if (!rows.length) k.text(t('No coin worth $100K or more here yet.', '这里还没有市值 $100K 以上的币。'), PAD, top + 56, body(34));
   rows.forEach((r, i) => {
     const y = top + i * rowH;
-    k.box(PAD, y, W - PAD * 2, rowH - 18, { r: 18, shadow: 6, line: 4, fill: i === 0 ? YEL : CARD });
+    const first = start + i === 0;
+    k.box(PAD, y, W - PAD * 2, rowH - 18, { r: 18, shadow: 6, line: 4, fill: first ? YEL : CARD });
     k.box(PAD + 16, y + 15, 56, 56, { fill: INK, r: 12, shadow: 0, line: 0 });
-    k.text(String(i + 1), PAD + 44, y + 55, disp(30), YEL, 'center');
+    k.text(String(start + i + 1), PAD + 44, y + 55, disp(start + i >= 99 ? 22 : 30), YEL, 'center');
     const name = k.fit(r.coin, body(38), 330);
     k.text(name, PAD + 92, y + 57, body(38));
     k.pill(k.fit((zh && r.nameZh) || r.name, mono(700, 21), 240), PAD + 92 + k.width(name, body(38)) + 18, y + 22, { font: mono(700, 21), h: 40, padX: 14 });
     k.text(usd(r.stockUsd), W - PAD - 22, y + 50, disp(36), INK, 'right');
-    k.text(t('cap ', '市值 ') + usd(r.mcap), W - PAD - 22, y + 76, mono(500, 19), i === 0 ? INK : MUT, 'right');
+    k.text(t('cap ', '市值 ') + usd(r.mcap), W - PAD - 22, y + 76, mono(500, 19), first ? INK : MUT, 'right');
   });
   k.foot(t('stockyard · pools read on-chain from PancakeSwap', 'stockyard · 池子数据直接读自链上 PancakeSwap'), top + Math.max(rows.length, 1) * rowH + 40);
   return k.c.toBuffer('image/png');

@@ -169,25 +169,51 @@ async function slip(ctx, wallet, refresh) {
   return sendPhoto(chat, png, slipCaption(d, zh), keys);
 }
 
-async function league(ctx, ticker) {
+// Ten coins to a page, with a button for each one on it.
+async function league(ctx, ticker, page = 0) {
   const zh = ctx.c.lang === 'zh', lg = await api('/api/league');
   const big = lg.rows.filter(listed);
   const want = (ticker || '').toUpperCase();
-  const list = big.filter((r) => !want || r.ticker === want || r.sym === want).sort((a, b) => b.stockUsd - a.stockUsd).slice(0, 10);
+  // A coin with pools against two stocks is listed once, by its deepest pool.
+  const once = new Set();
+  const all = big.filter((r) => !want || r.ticker === want || r.sym === want).sort((a, b) => b.stockUsd - a.stockUsd).filter((r) => !once.has(r.address) && once.add(r.address));
+  const pages = Math.max(1, Math.ceil(all.length / 10));
+  page = Math.min(Math.max(0, page), pages - 1);
+  const list = all.slice(page * 10, page * 10 + 10);
   // The three companies with the most stock in meme pools become filters.
   const by = {};
   for (const r of big) (by[r.ticker] ??= { ticker: r.ticker, name: nameOf(r, zh), usd: 0 }).usd += r.stockUsd;
   const top = Object.values(by).sort((a, b) => b.usd - a.usd).slice(0, 3);
   const mark = (on, text) => (on ? '• ' + text : text);
   const keys = [];
-  for (let i = 0; i < Math.min(list.length, 6); i += 3) keys.push(list.slice(i, i + 3).map((r) => btn(r.coin, 'c:' + r.address)));
+  for (let i = 0; i < list.length; i += 3) keys.push(list.slice(i, i + 3).map((r) => btn(r.coin, 'c:' + r.address)));
+  if (pages > 1) keys.push([
+    ...(page > 0 ? [btn(zh ? '‹ 上一页' : '‹ Back', `l:${want}:${page - 1}`)] : []),
+    btn(`${page + 1} / ${pages}`, 'n'),
+    ...(page < pages - 1 ? [btn(zh ? '下一页 ›' : 'More ›', `l:${want}:${page + 1}`)] : []),
+  ]);
   keys.push([btn(mark(!want, zh ? '全部' : 'All'), 'l:'), ...top.map((s) => btn(mark(s.ticker === want, s.name), 'l:' + s.ticker))]);
-  keys.push([btn(zh ? '🏠 首页' : '🏠 Home', 'h')]);
+  keys.push([btn(zh ? '🏢 全部公司' : '🏢 All companies', 'lc'), btn(zh ? '🏠 首页' : '🏠 Home', 'h')]);
   const title = want && list.length ? (zh ? `${nameOf(list[0], zh)} 排行榜` : `The ${nameOf(list[0], zh)} league`) : (zh ? '股票排行榜' : 'The stock league');
-  const caption = zh ? `🏆 <b>${esc(title)}</b>\n点一个币看它的卡片，或者换一只股票。` : `🏆 <b>${esc(title)}</b>\nTap a coin for its card, or switch company.`;
+  const where = pages > 1 ? (zh ? `第 ${page + 1} / ${pages} 页，共 ${all.length} 个币。` : `Page ${page + 1} of ${pages}, ${all.length} coins. `) : '';
+  const caption = zh
+    ? `🏆 <b>${esc(title)}</b>\n${where}点一个币看它的卡片。也可以直接把币名或合约地址发给我。`
+    : `🏆 <b>${esc(title)}</b>\n${where}Tap a coin for its card. You can also just send me a coin's name or its contract address.`;
   const medal = ['🥇', '🥈', '🥉'];
-  const text = `${caption}\n\n` + (list.length ? list.map((r, i) => `${medal[i] || `${i + 1}.`} <b>${esc(r.coin)}</b> · ${esc(nameOf(r, zh))} · <b>${usd(r.stockUsd)}</b>`).join('\n') : esc(zh ? `没有与 ${want} 配对、市值 $100K 以上的币。` : `No coin worth $100K or more trades against ${want}.`));
-  return screen(ctx, { png: await leagueImage(list, { title, total: lg.stats.stockUsd }, zh).catch(() => null), caption, text, keys });
+  const text = `${caption}\n\n` + (list.length ? list.map((r, i) => `${medal[page * 10 + i] || `${page * 10 + i + 1}.`} <b>${esc(r.coin)}</b> · ${esc(nameOf(r, zh))} · <b>${usd(r.stockUsd)}</b>`).join('\n') : esc(zh ? `没有与 ${want} 配对、市值 $100K 以上的币。` : `No coin worth $100K or more trades against ${want}.`));
+  return screen(ctx, { png: await leagueImage(list, { title, total: lg.stats.stockUsd, start: page * 10 }, zh).catch(() => null), caption, text, keys });
+}
+
+// Every company that has a listed coin trading against it, as buttons.
+async function companies(ctx) {
+  const zh = ctx.c.lang === 'zh', lg = await api('/api/league');
+  const by = {};
+  for (const r of lg.rows.filter(listed)) { const b = (by[r.ticker] ??= { ticker: r.ticker, name: nameOf(r, zh), usd: 0, n: 0 }); b.usd += r.stockUsd; b.n++; }
+  const list = Object.values(by).sort((a, b) => b.usd - a.usd).slice(0, 24);
+  const keys = [];
+  for (let i = 0; i < list.length; i += 2) keys.push(list.slice(i, i + 2).map((s) => btn(`${s.name} · ${s.n}`, 'l:' + s.ticker)));
+  keys.push([btn(zh ? '‹ 排行榜' : '‹ League', 'l:')]);
+  return say(ctx, zh ? '🏢 <b>选一家公司</b>\n数字是与它配对、市值 $100K 以上的币的数量。' : '🏢 <b>Pick a company</b>\nThe number is how many coins worth $100K or more trade against it.', keys);
 }
 
 // A coin by address, or by symbol: the one with the most stock in its pool wins a name clash.
@@ -348,7 +374,9 @@ async function onTap(ctx, data) {
   if (kind === 'ps') return askWallet(ctx);
   if (kind === 'p') return slip(ctx, arg);
   if (kind === 'r') return slip(ctx, arg, true);
-  if (kind === 'l') return league(ctx, arg);
+  if (kind === 'l') return league(ctx, arg, Number(extra) || 0);
+  if (kind === 'lc') return companies(ctx);
+  if (kind === 'n') return null; // the page counter is only a label
   if (kind === 'c') return coin(ctx, arg);
   if (kind === 'q') return checkMenu(ctx, arg);
   if (kind === 's' || kind === 'b') return check(ctx, kind, arg, Number(extra));
