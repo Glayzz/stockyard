@@ -284,6 +284,11 @@ async function onText(ctx, text) {
     // Anything else is tried as a coin's name before giving up.
     return (await findCoin(first, true)) ? coin(ctx, first) : home(ctx);
   }
+  // A link from the site carries what to open: t.me/<bot>?start=watch_0x… or slip_0x…
+  if (cmd === 'start' && rest[0]) {
+    const [what, wallet] = rest[0].split('_');
+    if (isAddr(wallet)) return what === 'watch' ? watch(ctx, wallet) : slip(ctx, wallet);
+  }
   if (cmd === 'payslip') return isAddr(rest[0]) ? slip(ctx, rest[0]) : askWallet(ctx);
   if (cmd === 'league') return league(ctx, rest[0]);
   if (cmd === 'coin') return rest[0] ? coin(ctx, rest[0]) : league(ctx);

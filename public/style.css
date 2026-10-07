@@ -273,7 +273,22 @@ a.link { border-bottom: 2px solid var(--ink); font-weight: 700; }
 .tries button { font: 700 13px var(--mono); background: var(--card); border: 2px solid var(--ink); border-radius: 999px; padding: 3px 12px; cursor: pointer; color: var(--ink); }
 .tries button:hover { background: var(--yellow); }
 .err { color: var(--red); font: 700 14px var(--mono); margin-top: 10px; min-height: 20px; }
-.printer { max-width: 540px; margin: 22px auto 0; }
+.slipwrap { display: grid; grid-template-columns: minmax(0, 520px) minmax(0, 1fr); gap: 30px; align-items: start; max-width: 1040px; margin: 26px auto 0; }
+.slipwrap:has(#side[hidden]) { grid-template-columns: minmax(0, 540px); justify-content: center; }
+.printer { width: 100%; max-width: 540px; margin: 0 auto; }
+.side { display: flex; flex-direction: column; gap: 16px; }
+.side .stats { margin-top: 0; grid-template-columns: 1fr 1fr; }
+.side .stat .v { font-size: 22px; overflow-wrap: anywhere; }
+.side .actions { justify-content: flex-start; margin-top: 2px; }
+.side h3 { font: 700 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 14px 0 4px; }
+.side-row { display: flex; justify-content: space-between; gap: 14px; align-items: baseline; padding: 6px 0; }
+.side-row > span:first-child { font: 700 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); flex: none; }
+.emps { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.emps a.pill:hover { background: var(--yellow); color: var(--ink); }
+.payouts { list-style: none; margin: 0; padding: 0; }
+.payouts li { display: grid; grid-template-columns: 62px 1fr auto; gap: 10px; align-items: baseline; padding: 7px 0; border-top: 2px dashed var(--soft); font: 500 13px var(--mono); }
+.payouts .d { color: var(--green); font-weight: 700; }
+.payouts a { border-bottom: 2px solid var(--ink); font-weight: 700; }
 .slot { height: 30px; background: var(--ink); border-radius: 16px; position: relative; z-index: 2; display: flex; align-items: center; justify-content: flex-end; padding: 0 16px; gap: 8px; color: var(--paper); font: 700 11px var(--mono); letter-spacing: .1em; }
 .feed { overflow: hidden; padding: 0 14px 20px 20px; margin-top: -15px; }
 .feed canvas { width: 100%; height: auto; display: block; transform: translateY(-104%); }
@@ -319,6 +334,8 @@ a.link { border-bottom: 2px solid var(--ink); font-weight: 700; }
   .league th:nth-child(6), .league td:nth-child(6) { display: none; }
   th, td { padding: 10px 10px; }
   .lookup { flex-direction: column; }
+  .slipwrap { grid-template-columns: minmax(0, 1fr); }
+  .side .actions { justify-content: center; }
   .league .under { display: none; }
   .held { grid-template-columns: 110px 1fr 48px; }
   .doors, .proofs { grid-template-columns: 1fr 1fr; }

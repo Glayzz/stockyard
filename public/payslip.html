@@ -31,6 +31,7 @@
     <form class="lookup" id="form">
       <input id="wallet" placeholder="0x… wallet address" data-zh-placeholder="0x… 钱包地址" autocomplete="off" spellcheck="false" aria-label="Wallet address">
       <button class="btn" type="submit" data-zh="打印工资条">Print payslip</button>
+      <button class="btn plain" type="button" id="mine" hidden data-zh="用我的钱包">Use my wallet</button>
     </form>
     <div class="tries"><span data-zh="试一个：">Try one:</span>
       <button type="button" data-w="0x28816c4c4792467390c90e5b426f198570e29307" data-zh="NIUMA 最大持有人">NIUMA's largest holder</button>
@@ -39,15 +40,29 @@
     <div class="err" id="err" role="alert"></div>
   </section>
 
-  <div class="printer" id="printer" hidden>
-    <div class="slot"><span class="dot"></span><span id="slot-text">READY</span></div>
-    <div class="feed" id="feed"><canvas id="slip" width="1094" height="1142" role="img"></canvas></div>
-    <div class="actions">
-      <button class="btn" id="save" type="button" data-zh="保存图片">Save image</button>
-      <button class="btn plain" id="share" type="button" data-zh="分享到 X">Share on X</button>
-      <button class="btn plain" id="copy" type="button" data-zh="复制链接">Copy link</button>
+  <div class="slipwrap">
+    <div class="printer" id="printer" hidden>
+      <div class="slot"><span class="dot"></span><span id="slot-text">READY</span></div>
+      <div class="feed" id="feed"><canvas id="slip" width="1094" height="1142" role="img"></canvas></div>
+      <p class="sr" id="summary"></p>
     </div>
-    <p class="sr" id="summary"></p>
+    <aside class="side" id="side" hidden>
+      <div class="stats" id="side-stats"></div>
+      <div class="card">
+        <div class="side-row"><span data-zh="钱包">Wallet</span><span id="side-wallet"></span></div>
+        <div class="side-row" id="side-emp-row"><span data-zh="发薪的 Meme">Paid by</span><span class="emps" id="side-emps"></span></div>
+        <div id="side-pay-wrap">
+          <h3 data-zh="最近发放">Latest payouts</h3>
+          <ul class="payouts" id="side-pay"></ul>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn" id="save" type="button" data-zh="保存图片">Save image</button>
+        <button class="btn plain" id="share" type="button" data-zh="分享到 X">Share on X</button>
+        <button class="btn plain" id="copy" type="button" data-zh="复制链接">Copy link</button>
+        <a class="btn plain" id="alert" target="_blank" rel="noopener" data-zh="🔔 在 Telegram 收发薪提醒">🔔 Payday alerts on Telegram</a>
+      </div>
+    </aside>
   </div>
 
   <section class="reinvest" id="reinvest" hidden>
@@ -216,6 +231,7 @@ async function print(wallet) {
     const [data] = await Promise.all([lookup(wallet), ...fonts.map((f) => document.fonts.load(f, '牛马工资条已待发薪试用期实习初高级主管股东Aa0').catch(() => {}))]);
     P.data = data;
     drawSlip(data);
+    renderSide(data);
     history.replaceState(null, '', '?w=' + wallet);
     void $('feed').offsetWidth;
     $('feed').classList.add('print');
@@ -223,9 +239,31 @@ async function print(wallet) {
     if (!data.history) err.textContent = t('Payout history is unavailable right now, so this slip shows balances only.', '暂时拿不到分红记录，这张工资条只显示余额。');
     renderReinvest();
   } catch (e) {
-    $('printer').hidden = true; $('reinvest').hidden = true;
+    $('printer').hidden = true; $('side').hidden = true; $('reinvest').hidden = true;
     err.textContent = t('Could not print this payslip: ', '无法打印这张工资条：') + e.message + t('. Try again in a moment.', '。请稍后再试。');
   }
+}
+
+// Beside the slip: the headline numbers, who pays this wallet, and each recent payout with its transaction.
+function renderSide(d) {
+  const stat = (k, v, m) => { const s = el('div', 'stat'); s.append(el('div', 'k', k), el('div', 'v', v)); if (m) s.append(el('div', 'm', m)); return s; };
+  const tiles = d.paid
+    ? [stat(t('Paid to date', '累计已发'), (d.paid.atLeast ? '≥ ' : '') + usd(d.paid.usd), t('in real stock', '真实股票')), stat(t('Payouts', '发放次数'), String(d.paid.count) + (d.paid.atLeast ? '+' : ''), t('since ', '自 ') + day(d.paid.since, true))]
+    : [stat(t('Paid to date', '累计已发'), '$0', t('no payouts found', '未发现分红'))];
+  tiles.push(stat(t('Holding today', '今天持有'), usd(d.total), zh ? d.lines.length + ' 只股票' : d.lines.length + (d.lines.length === 1 ? ' stock' : ' stocks')), stat(t('Grade', '职级'), grade(d.paid ? d.paid.usd : d.total).split(' · ')[0], grade(d.paid ? d.paid.usd : d.total).split(' · ')[1] || ''));
+  $('side-stats').replaceChildren(...tiles);
+  $('side-wallet').replaceChildren(copyable(d.wallet));
+  $('side-emp-row').hidden = !d.employers.length;
+  $('side-emps').replaceChildren(...d.employers.slice(0, 6).map((e) => { const a = el('a', 'pill', e.coin); a.href = 'coin.html?a=' + e.address; return a; }), ...(d.employerCount > 6 ? [el('span', 'addr', '+' + (d.employerCount - 6))] : []));
+  $('side-pay-wrap').hidden = !d.recent.length;
+  $('side-pay').replaceChildren(...d.recent.map((p) => {
+    const li = el('li'), a = el('a', null, usd(p.value));
+    a.href = 'https://bscscan.com/tx/' + p.hash; a.target = '_blank'; a.rel = 'noopener';
+    li.append(el('span', 't', day(p.time)), el('span', 'd', '+' + num(p.shares) + ' ' + stockName(p)), a);
+    return li;
+  }));
+  $('alert').href = 'https://t.me/Stockyard_PayslipBot?start=watch_' + d.wallet;
+  $('side').hidden = false;
 }
 
 function reinvestRows(d) {
@@ -331,6 +369,15 @@ $('copy').onclick = async () => {
   try { await navigator.clipboard.writeText(location.href); $('copy').textContent = t('Link copied', '链接已复制'); } catch { $('copy').textContent = t('Copy failed', '复制失败'); }
   setTimeout(() => { $('copy').textContent = t('Copy link', '复制链接'); }, 1800);
 };
+
+// With a wallet in the browser, one click prints its own slip.
+if (window.ethereum) {
+  $('mine').hidden = false;
+  $('mine').onclick = async () => {
+    try { const [account] = await ethereum.request({ method: 'eth_requestAccounts' }); if (account) print(account); }
+    catch (e) { $('err').textContent = t('Could not read your wallet: ', '无法读取你的钱包：') + (e.message || e); }
+  };
+}
 
 const start = new URLSearchParams(location.search).get('w');
 if (start) print(start);
