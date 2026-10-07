@@ -28,4 +28,12 @@ Then the agent card is at `http://localhost:9000/.well-known/agent-card.json` an
 `http://localhost:9000/mcp`. `bag dev` does the same in one step where `tsx` works; on our Windows
 machine it did not, which is why the compiled form is shown.
 
+## The agent as a buyer
+
+`app/agent/scripts/buy-data.mjs` has the agent buy one answer from Stockyard's paid data over x402,
+signed by its own wallet through the Studio runtime's x402 client and settled by Binance's B402.
+Run plainly it only shows balances and the price. With `--send` it first swaps a little BNB into
+U if the wallet is short, then pays. It refuses any 402 that names a receiving address other than
+the one in Stockyard's `.env`, and never pays more than five cents a call.
+
 `.studio/` holds the encrypted keystore and its password and is never committed.
