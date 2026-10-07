@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 const FONTS = fileURLToPath(new URL('../assets/fonts/', import.meta.url));
 let kit;
-async function canvasKit() {
+export async function canvasKit() {
   if (kit !== undefined) return kit;
   try {
     const lib = await import('@napi-rs/canvas');

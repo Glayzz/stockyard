@@ -21,7 +21,7 @@ worth $100K or more. Some pay their holders in stock. Until now there was no too
 | `server/paid.mjs` · `/x402` | The same data sold to agents per call over x402, settled through Binance's B402: one cent for the league or a coin, two for a payslip. `GET /x402` is the free catalogue. Each settled call also lists the resource in B402's Bazaar. |
 | `scripts/x402-buy.mjs` | An agent paying for that data with no SDK: about 150 lines that take the 402, sign an EIP-3009 authorization and call again. The buyer needs no BNB. |
 | `stockyardagent/` | The Stockyard agent, scaffolded with BNB Agent Studio: an ERC-8004 identity on BNB Chain (agent 365431), Studio's runtime with an A2A card and an MCP endpoint, and a work hook that is fixed code, not an LLM. See its own README. |
-| `server/telegram.mjs` | A Telegram bot driven by buttons: a wallet's payslip sent as the same image the site prints, the league by company, a coin's card with its meme-versus-stock split, a price check (what a sale or a buy would give right now), and payday alerts with the updated slip. English and 中文. It holds no key and cannot trade. |
+| `server/telegram.mjs` | A Telegram bot whose every screen is a picture in the site's look with buttons under it: home, the league by company, a coin's card with its own links, and a wallet's payslip. Tapping a button redraws the same message. A price check shows what a sale or a buy would give right now, and payday alerts send the updated slip. A link from the site opens the bot on a wallet. English and 中文. It holds no key and cannot trade. |
 
 ## Status
 
