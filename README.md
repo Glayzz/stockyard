@@ -19,6 +19,7 @@ worth $100K or more. Some pay their holders in stock. Until now there was no too
 | `mcp/server.mjs` | The same data as five MCP tools for any agent. |
 | `server/paid.mjs` · `/x402` | The same data sold to agents per call over x402, settled through Binance's B402: one cent for the league or a coin, two for a payslip. `GET /x402` is the free catalogue. Each settled call also lists the resource in B402's Bazaar. |
 | `scripts/x402-buy.mjs` | An agent paying for that data with no SDK: about 150 lines that take the 402, sign an EIP-3009 authorization and call again. The buyer needs no BNB. |
+| `stockyardagent/` | The Stockyard agent, scaffolded with BNB Agent Studio: an ERC-8004 identity on BNB Chain (agent 365431), Studio's runtime with an A2A card and an MCP endpoint, and a work hook that is fixed code, not an LLM. See its own README. |
 | `server/telegram.mjs` | A Telegram bot driven by buttons: a wallet's payslip sent as the same image the site prints, the league by company, a coin's card with its meme-versus-stock split, a price check (what a sale or a buy would give right now), and payday alerts with the updated slip. English and 中文. It holds no key and cannot trade. |
 
 ## Status
@@ -35,7 +36,14 @@ Work in progress during the hackathon build window.
   receipt prints at the end. The server prepares the approval and swap through Binance's
   aggregator and checks them on the Transaction API first; the user's own wallet signs.
   The server never holds a key.
-- Next: a data agent on BNB Agent Studio with b402 pay-per-call.
+- The Stockyard agent (`stockyardagent/`, built with BNB Agent Studio) is registered on BNB Chain
+  mainnet as ERC-8004 agent **365431**, in [this transaction](https://bscscan.com/tx/0x1d978538d858f22bf1c51e3b678f11eb3eac0e2e50bc2642358f3182f6a4c65a). It writes the same reports
+  as fixed code and serves them over A2A and MCP.
+- Paid data over x402 is switched on and checked against Binance's B402 as far as verification:
+  a correctly signed payment from an empty wallet is turned down only for lack of funds, and a
+  tampered one for its signature. BNB Agent Studio's own x402 client reads our 402 and picks an
+  asset. The first settled payment is waiting on a funded buyer.
+- Next: host the site and the agent, and switch on the agent's paid jobs.
 
 Binance Web3 API modules in use: RWA Data, Market, Trading, Transaction, Wallet, B402 Payments.
 

@@ -6,7 +6,7 @@ given one job: write reports on stock memes from Stockyard's live data.
 
 | Part | What it is |
 | --- | --- |
-| Identity | An ERC-8004 registration on BNB Chain for the agent's own wallet. |
+| Identity | ERC-8004 agent **365431** on BNB Chain mainnet, wallet `0x1E8316cE99376E8E1F5E6b6482243e4d47DADdc3`, registered in [this transaction](https://bscscan.com/tx/0x1d978538d858f22bf1c51e3b678f11eb3eac0e2e50bc2642358f3182f6a4c65a) with gas paid by BNB Chain's sponsor relay. Its registration points at the agent card in this folder. |
 | Runtime | Agent Studio's runtime (`app/agent/`), serving an A2A agent card and an MCP endpoint. |
 | The work | `app/agent/src/stockyardWork.ts`: a wallet's stock payslip, a coin's breakdown, or the league, as Markdown. Fixed code, no LLM, so it cannot be talked into anything else. |
 | Free to try | The MCP tool `stock_meme_report`. |

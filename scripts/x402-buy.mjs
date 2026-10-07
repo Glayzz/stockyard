@@ -87,7 +87,7 @@ function sign(digestHex, privateKey) {
 const DOMAIN_TYPE = hex(keccak256(text('EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)')));
 const TRANSFER_TYPE = hex(keccak256(text('TransferWithAuthorization(address from,address to,uint256 value,uint256 validAfter,uint256 validBefore,bytes32 nonce)')));
 export const domainSeparator = (name, version, chainId, contract) => hash(DOMAIN_TYPE + hex(keccak256(text(name))) + hex(keccak256(text(version))) + word(chainId) + word(contract));
-function authorize(terms, privateKey) {
+export function authorize(terms, privateKey) {
   const now = Math.floor(Date.now() / 1000);
   const auth = { from: addressOf(privateKey), to: terms.payTo, value: terms.amount, validAfter: '0', validBefore: String(now + terms.maxTimeoutSeconds), nonce: '0x' + hex(randomBytes(32)) };
   const struct = hash(TRANSFER_TYPE + word(auth.from) + word(auth.to) + word(auth.value) + word(auth.validAfter) + word(auth.validBefore) + auth.nonce.slice(2));
