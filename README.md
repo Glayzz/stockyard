@@ -105,7 +105,8 @@ up for Railway: start command, and `/api/health` as the health check.
   `B402_PAY_TO`, `TELEGRAM_BOT_TOKEN` and `PUBLIC_URL` (the site's own address, used in the links
   the bot and the paid routes hand out). The host supplies `PORT`.
 - **One bot per token.** The Telegram bot polls, so run it in one place only.
-- The league builds itself from `data/pools.bin` and `data/live.json` on first start. The payment
+- A new server shows the league from `data/league-seed.json` at once, labelled with when it was
+  read, then replaces it with a fresh one built from `data/pools.bin` and `data/live.json`. The payment
   ledger and the bot's watch list are files under `data/`; give the host a volume there if they
   should survive a redeploy.
 

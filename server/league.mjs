@@ -10,7 +10,9 @@ import { pairCount, scanRange } from './scan.mjs';
 const root = fileURLToPath(new URL('..', import.meta.url));
 const SCAN = root + 'data/stock-pairs.json', NEW = root + 'data/stock-pairs-new.json', PACK = root + 'data/pools.bin';
 // LIVE lists the pools last seen holding stock, so a restart can skip straight to them. SNAP is the last league built.
-const LIVE = root + 'data/live.json', SNAP = root + 'data/league-cache.json';
+// SEED is a league that ships with the repo, so a brand-new server has something to show in its
+// first minute; the page labels it with the time it was read until a fresh one replaces it.
+const LIVE = root + 'data/live.json', SNAP = root + 'data/league-cache.json', SEED = root + 'data/league-seed.json';
 const USDT = '0x55d398326f99059ff775485246999027b3197955';
 const DEAD = '0x000000000000000000000000000000000000dead';
 const V2_FACTORY = '0xca143ce32fe78f1f7019d7d551a6402fc5350c73', V3_FACTORY = '0x0bfbcf9fa4f9c56b0f40a671ad40e0805a091865';
@@ -283,7 +285,7 @@ let cache = null, building = null;
 // The league is rebuilt at most once every `maxAgeMs`; callers in between get the cached copy.
 // After a restart the last league saved to disk is served at once while a fresh one is built.
 export async function league(maxAgeMs = 120000) {
-  if (!cache && existsSync(SNAP)) { try { cache = JSON.parse(readFileSync(SNAP, 'utf8')); } catch {} }
+  for (const file of [SNAP, SEED]) if (!cache && existsSync(file)) { try { cache = JSON.parse(readFileSync(file, 'utf8')); } catch {} }
   if (cache && Date.now() - Date.parse(cache.updatedAt) < maxAgeMs) return cache;
   if (!building) {
     building = build().then((v) => { cache = v; try { writeFileSync(SNAP, JSON.stringify(v)); } catch {} return v; }).finally(() => { building = null; });
