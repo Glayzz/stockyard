@@ -82,12 +82,25 @@ if (held.u < price) {
   if (!done) stop('The top-up has not confirmed yet. Run this again in a minute.');
   held = await balances();
   console.log(`Top-up done: ${held.bnb.toFixed(6)} BNB, ${held.u.toFixed(4)} U.`);
+  // Binance checks a payment against its own view of the chain, which can be a few blocks
+  // behind. Give the new balance a moment to be seen everywhere before paying with it.
+  await new Promise((r) => setTimeout(r, 12000));
 } else if (!send) {
   finish('The wallet has enough U. Nothing was sent. Add --send to pay for this call.');
 }
 
 // Pay and fetch, with the Studio runtime's own x402 client.
-const result = await fetchWithPayment(url, { maxUsd: 0.05, wallet, expectedTo: payTo, networkName: 'bsc-mainnet', asset: 'U', allowedHosts: [new URL(url).hostname] });
+// The same signed payment is offered up to three times; settling it twice is not possible.
+let result;
+try {
+  result = await fetchWithPayment(url, { maxUsd: 0.05, wallet, expectedTo: payTo, networkName: 'bsc-mainnet', asset: 'U', allowedHosts: [new URL(url).hostname], maxRetries: 3, baseDelaySeconds: 4 });
+} catch (err) {
+  const why = await fetch(origin + '/x402/last').then((r) => r.json()).catch(() => null);
+  console.log('The payment did not go through:', String(err.message).split('(')[0].trim());
+  if (why?.reason) console.log('What the seller saw:', why.step, '-', why.reason);
+  held = await balances();
+  stop(`Agent wallet: ${held.bnb.toFixed(6)} BNB, ${held.u.toFixed(4)} U.`);
+}
 console.log(`Answer: HTTP ${result.statusCode}. Paid ${result.paidUsd ?? 0} ${result.symbol ?? 'U'}.`);
 if (result.settlement?.transaction) console.log('Payment settled: https://bscscan.com/tx/' + result.settlement.transaction);
 console.log(JSON.stringify(result.json ?? {}).slice(0, 400) + ' …');

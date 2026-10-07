@@ -66,6 +66,9 @@ async function requirements(product, payTo) {
 
 // A repeated request with a payment already settled gets the same answer, not a second charge.
 const settled = new Map();
+// Why the last payment that failed was turned down, so a buyer or the operator can see it.
+let last = null;
+const turnedDown = (step, reason, extra) => { last = { at: new Date().toISOString(), step, reason, ...extra }; console.log(`paid: ${step} turned a payment down: ${reason}`); };
 const totals = { calls: 0, usd: 0 };
 if (existsSync(LEDGER)) for (const line of readFileSync(LEDGER, 'utf8').split('\n')) { try { const e = JSON.parse(line); totals.calls++; totals.usd += Number(e.usd); } catch {} }
 
@@ -82,6 +85,7 @@ export async function paid(req, url) {
       how: 'Call a resource. It answers 402 with payment requirements; sign one and repeat the call with it base64-encoded in the PAYMENT-SIGNATURE header.',
     });
   }
+  if (url.pathname === '/x402/last') return json(200, last || { reason: null });
   const product = PRODUCTS[url.pathname];
   if (!product || req.method !== 'GET') return json(404, { error: 'No such paid resource. GET /x402 lists them.' });
   if (!/^0x[0-9a-fA-F]{40}$/.test(payTo || '')) return json(503, { error: 'Paid data is not switched on here: B402_PAY_TO is not set.' });
@@ -105,7 +109,7 @@ export async function paid(req, url) {
 
   const paymentPayload = { ...payment, resource };
   const check = await b402('verify', { x402Version: 2, paymentPayload, paymentRequirements: terms });
-  if (!check?.isValid) return challenge(check?.invalidReason || 'The payment could not be verified');
+  if (!check?.isValid) { turnedDown('verify', check?.invalidReason || 'unknown', { message: check?.invalidMessage || null }); return challenge(check?.invalidReason || 'The payment could not be verified'); }
 
   // Do the work before taking the money, so a failed answer is never charged.
   const work = await handle('GET', product.api, query);
@@ -118,7 +122,7 @@ export async function paid(req, url) {
     schema: { $schema: 'https://json-schema.org/draft/2020-12/schema', type: 'object', properties: { input: { type: 'object', properties: { type: { const: 'http' }, method: { enum: ['GET'] } }, required: ['type', 'method'] } }, required: ['input'] },
   };
   const done = await b402('settle', { x402Version: 2, paymentPayload: { ...paymentPayload, extensions: { ...payment.extensions, bazaar } }, paymentRequirements: terms });
-  if (!done?.success) return challenge(done?.errorReason || 'The payment could not be settled');
+  if (!done?.success) { turnedDown('settle', done?.errorReason || 'unknown', { message: done?.errorMessage || null, transaction: done?.transaction || null }); return challenge(done?.errorReason || 'The payment could not be settled'); }
 
   const receipt = { success: true, transaction: done.transaction, network: done.network || NETWORK, payer: done.payer };
   settled.set(key, { at: Date.now(), body: work.json, receipt });
