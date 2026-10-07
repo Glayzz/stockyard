@@ -1,0 +1,19 @@
+{
+  "name": "Stockyard",
+  "description": "Stockyard writes reports on stock memes: meme coins on BNB Chain whose pool is quoted in a tokenized stock. Ask for a wallet's payslip (what its memes have paid it in stock), a coin (price, pool, and how much of its move was the stock), or the league. Reports are fixed code over live BNB Chain and Binance Web3 API data, with no LLM in the loop. This card is served from the repository until the runtime has a public address; run it locally with the instructions in the repository.",
+  "url": "https://github.com/Glayzz/stockyard",
+  "version": "1.0.0",
+  "protocolVersion": "0.3.0",
+  "preferredTransport": "JSONRPC",
+  "capabilities": {
+    "streaming": false
+  },
+  "defaultInputModes": [
+    "application/json"
+  ],
+  "defaultOutputModes": [
+    "application/json"
+  ],
+  "skills": [],
+  "documentationUrl": "https://github.com/Glayzz/stockyard/tree/main/stockyardagent"
+}
