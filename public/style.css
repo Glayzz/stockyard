@@ -145,6 +145,7 @@ td { font: 700 15px var(--mono); }
 .clock b { color: var(--yellow); font: 700 14px var(--mono); letter-spacing: .04em; text-transform: uppercase; }
 .clock .dot { box-shadow: 0 0 0 2px var(--paper); }
 .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 22px; }
+.sell .seg { margin-bottom: 16px; }
 .sell label { display: block; font: 700 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
 .sell input, .lookup input { width: 100%; background: #fff; border: var(--bd); border-radius: 12px; color: var(--ink); font: 700 22px var(--mono); padding: 11px 14px; }
 .sell input:focus, .lookup input:focus { outline: none; box-shadow: 4px 4px 0 var(--yellow), 4px 4px 0 2.5px var(--ink); }

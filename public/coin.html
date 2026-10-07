@@ -51,8 +51,12 @@
 
     <div class="two">
       <div>
-        <h2 class="sec" data-zh="卖出，并留下股票">Sell and keep the stock</h2>
+        <h2 class="sec" data-zh="直接用股票买卖">Trade it against the stock</h2>
         <div class="card sell">
+          <div class="seg" id="side">
+            <button data-s="sell" class="on" data-zh="卖出，留下股票">Sell, keep the stock</button>
+            <button data-s="buy" data-zh="用股票买入">Buy with stock</button>
+          </div>
           <label for="amount" id="amount-label">Amount to sell</label>
           <input id="amount" inputmode="decimal" value="100000" autocomplete="off">
           <div class="opts" id="opts"></div>
@@ -86,7 +90,7 @@
 initLang();
 const addr = (new URLSearchParams(location.search).get('a') || NIUMA).toLowerCase();
 const USDT = '0x55d398326f99059ff775485246999027b3197955';
-const S = { hours: 24, seen: new Set(), d: null, quotes: null };
+const S = { hours: 24, seen: new Set(), d: null, quotes: null, side: 'sell' };
 
 const fail = (msg) => { $('page').hidden = true; $('state').hidden = false; $('state').textContent = msg; };
 const apiJson = async (url) => { const r = await fetch(url); const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j; };
@@ -241,11 +245,12 @@ function renderCompany() {
   $('company-wrap').hidden = false;
 }
 
-// Coin amount typed by the user, as a whole number in the coin's smallest unit.
+// The amount typed by the user, as a whole number in the token's smallest unit: coins when
+// selling, shares of the stock token (18 decimals) when buying.
 function amountUnits() {
   const text = $('amount').value.replace(/,/g, '').trim();
   if (!/^\d+(\.\d+)?$/.test(text) || !(Number(text) > 0)) return null;
-  const [whole, frac = ''] = text.split('.'), d = S.d.coin.decimals ?? 18;
+  const [whole, frac = ''] = text.split('.'), d = S.side === 'buy' ? 18 : S.d.coin.decimals ?? 18;
   return (BigInt(whole) * 10n ** BigInt(d) + BigInt((frac + '0'.repeat(d)).slice(0, d) || '0')).toString();
 }
 
@@ -256,19 +261,27 @@ function queueQuotes() {
   renderSell();
   quoteTimer = setTimeout(loadQuotes, 450);
 }
+// Two quotes each way. Selling: into the stock, and into USDT. Buying: paying with the stock, and
+// paying the same dollars in USDT.
 async function loadQuotes() {
-  const amount = amountUnits(), run = ++quoteRun;
+  const amount = amountUnits(), run = ++quoteRun, side = S.side, stock = S.d.stock;
   if (!amount) return;
-  const q = (to) => apiJson(`/api/quote?from=${addr}&to=${to}&amount=${amount}`).catch((e) => ({ error: e.message }));
-  const [keep, cash] = await Promise.all([q(S.d.stock.address), q(USDT)]);
+  const q = (from, to, units) => apiJson(`/api/quote?from=${from}&to=${to}&amount=${units}`).catch((e) => ({ error: e.message }));
+  let pair;
+  if (side === 'sell') pair = [q(addr, stock.address, amount), q(addr, USDT, amount)];
+  else {
+    const dollars = Number(amount) / 1e18 * (stock.price || 0);
+    pair = [q(stock.address, addr, amount), dollars > 0 ? q(USDT, addr, (BigInt(Math.round(dollars * 1e6)) * 10n ** 12n).toString()) : { error: t('No price for this stock', '这只股票暂无价格') }];
+  }
+  const [keep, cash] = await Promise.all(pair);
   if (run !== quoteRun) return;
-  S.quotes = { amount, keep, cash };
+  S.quotes = { side, amount, keep, cash };
   renderSell();
 }
 
 function renderSell() {
-  const { coin, stock } = S.d;
-  $('amount-label').textContent = t(coin.symbol + ' to sell', '卖出 ' + coin.symbol + ' 数量');
+  const { coin, stock } = S.d, buy = S.side === 'buy', name = stockName(stock);
+  $('amount-label').textContent = buy ? t(stock.name + ' shares to spend', '花费 ' + name + ' 股数') : t(coin.symbol + ' to sell', '卖出 ' + coin.symbol + ' 数量');
   const opts = $('opts'), note = $('sell-note');
   opts.replaceChildren();
   if (!amountUnits()) { note.textContent = t('Enter an amount to see what you would receive.', '输入数量，查看你能换到什么。'); trade.render(); return; }
@@ -276,14 +289,19 @@ function renderSell() {
   const { keep, cash } = S.quotes;
   const hops = (q) => { const n = q.hops.length - 1; return zh ? n + ' 次兑换' : n + (n === 1 ? ' swap' : ' swaps'); };
   const opt = (k, tag, v, m, best) => { const o = el('div', 'opt' + (best ? ' best' : '')); const kk = el('div', 'k', k); if (tag) kk.append(el('span', null, tag)); o.append(kk, el('div', 'v', v), el('div', 'm', m)); return o; };
-  const keepLabel = t('Keep the stock', '留下股票'), cashLabel = t('Take cash', '换成现金'), none = t('No quote', '无报价');
-  if (keep.error) opts.append(opt(keepLabel, null, none, why(keep.error), true));
-  else { const out = Number(keep.toAmount) / 1e18; opts.append(opt(keepLabel, hops(keep), num(out) + t(' shares', ' 股'), t(stock.name + ', worth about ', stockName(stock) + '，约值 ') + usd(out * (stock.price || 0)), true)); }
-  if (cash.error) opts.append(opt(cashLabel, null, none, why(cash.error)));
-  else opts.append(opt(cashLabel, hops(cash), usd(Number(cash.toAmount) / 1e18), t('in USDT', '以 USDT 计')));
+  const mainLabel = buy ? t('Pay with the stock', '用股票支付') : t('Keep the stock', '留下股票');
+  const altLabel = buy ? t('Pay with cash', '用现金支付') : t('Take cash', '换成现金'), none = t('No quote', '无报价');
+  const coins = (q) => num(Number(q.toAmount) / 10 ** (coin.decimals ?? 18)) + ' ' + coin.symbol;
+  if (keep.error) opts.append(opt(mainLabel, null, none, why(keep.error), true));
+  else if (buy) { const spent = Number(S.quotes.amount) / 1e18; opts.append(opt(mainLabel, hops(keep), coins(keep), t(`for ${num(spent)} ${stock.name} shares, worth about `, `花费 ${num(spent)} 股 ${name}，约值 `) + usd(spent * (stock.price || 0)), true)); }
+  else { const out = Number(keep.toAmount) / 1e18; opts.append(opt(mainLabel, hops(keep), num(out) + t(' shares', ' 股'), t(stock.name + ', worth about ', name + '，约值 ') + usd(out * (stock.price || 0)), true)); }
+  if (cash.error) opts.append(opt(altLabel, null, none, why(cash.error)));
+  else if (buy) opts.append(opt(altLabel, hops(cash), coins(cash), t('for the same dollars in USDT', '花费等值的 USDT')));
+  else opts.append(opt(altLabel, hops(cash), usd(Number(cash.toAmount) / 1e18), t('in USDT', '以 USDT 计')));
+  const tax = buy ? S.buyTax : S.sellTax;
   note.textContent = keep.error ? (offlineError(keep.error) ? t('Quotes come from Binance. They will show here once it can be reached again.', '报价来自币安，连上之后会显示在这里。') : t('Binance could not quote this amount.', '币安无法为这个数量报价。'))
-    : zh ? `币安聚合器实时报价（${keep.vendor}）。价格影响 ${(keep.priceImpact * 100).toFixed(2)}%。` + (S.sellTax ? `这个币卖出时还会收 ${(S.sellTax * 100).toFixed(1)}% 的税。` : '')
-    : `Live quotes from Binance's aggregator (${keep.vendor}). Price impact ${(keep.priceImpact * 100).toFixed(2)}%.` + (S.sellTax ? ` This coin also takes a ${(S.sellTax * 100).toFixed(1)}% tax on sells.` : '');
+    : zh ? `币安聚合器实时报价（${keep.vendor}）。价格影响 ${(keep.priceImpact * 100).toFixed(2)}%。` + (tax ? `这个币${buy ? '买入' : '卖出'}时还会收 ${(tax * 100).toFixed(1)}% 的税。` : '')
+    : `Live quotes from Binance's aggregator (${keep.vendor}). Price impact ${(keep.priceImpact * 100).toFixed(2)}%.` + (tax ? ` This coin also takes a ${(tax * 100).toFixed(1)}% tax on ${buy ? 'buys' : 'sells'}.` : '');
   trade.render();
 }
 
@@ -291,12 +309,31 @@ function renderSell() {
 const trade = tradeFlow($('trade'), () => {
   if (!S.quotes || S.quotes.keep.error) return null;
   const { coin, stock } = S.d;
+  if (S.quotes.side === 'buy') return {
+    from: stock.address, to: addr, amount: S.quotes.amount, slippage: 3 + (S.buyTax || 0) * 100, symbol: stockName(stock),
+    receive: (units) => t('about ', '约 ') + num(Number(units) / 10 ** (coin.decimals ?? 18)) + ' ' + coin.symbol,
+    action: t('Buy with ' + stock.name, '用' + stockName(stock) + '买入'), done: t('Done. The coin is in your wallet.', '完成。币已到你的钱包。'),
+  };
   return {
     from: addr, to: stock.address, amount: S.quotes.amount, slippage: 3 + (S.sellTax || 0) * 100, symbol: coin.symbol,
     receive: (units) => { const out = Number(units) / 1e18; return zh ? `约 ${num(out)} 股 ${stockName(stock)}` : `about ${num(out)} ${stock.name} shares`; },
     action: t('Sell and keep the stock', '卖出并留下股票'), done: t('Done. The stock is in your wallet.', '完成。股票已到你的钱包。'),
   };
 });
+
+// Each side keeps its own amount: coins to sell, or shares of the stock to spend.
+const typed = { sell: null, buy: null };
+$('side').onclick = (e) => {
+  const side = e.target.dataset.s;
+  if (!side || side === S.side || !S.d) return;
+  typed[S.side] = $('amount').value;
+  S.side = side;
+  // A buy starts at about fifty dollars of the stock.
+  if (typed.buy == null) { const price = S.d.stock.price; typed.buy = price ? String(Number((50 / price).toPrecision(2))) : '1'; }
+  $('amount').value = typed[side];
+  for (const b of $('side').children) b.classList.toggle('on', b.dataset.s === side);
+  queueQuotes();
+};
 
 function renderTape() {
   const tape = $('tape'), flow = $('flow'), { coin, stock, trades } = S.d;

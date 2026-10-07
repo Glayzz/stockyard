@@ -5,13 +5,14 @@ description: |
   tokenized stock (bStocks such as SPYB, QQQB, SPCXB) instead of BNB or USDT.
   Covers: the league of every stock meme ranked by the stock its pool holds, a coin's price move
   split into the meme's part and the stock's part, the stock payouts a wallet has received
-  (its payslip), and a sell quote that ends in the stock instead of cash.
+  (its payslip), a sell quote that ends in the stock instead of cash, and a buy quote paid in the stock.
 
   Use this skill when users ask about:
   - Which meme coins trade against a tokenized stock, or against one stock such as SPY or SpaceX
   - Why a stock meme's dollar price moved, or how much real stock sits in its pool
   - What a wallet has been paid in stock by the memes it holds
   - Selling a stock meme and keeping the stock, or sweeping small stock balances into one stock
+  - Buying a stock meme with the stock it trades against, or putting stock payouts back into the coin
   - Which meme community holds the most of a stock
 
   NOT for tokenized stock data on its own (use binance-tokenized-securities-info), general token
@@ -39,6 +40,7 @@ It never signs anything itself.
 | Coin | One stock meme in detail | "Why did it move", pool depth, stock premium |
 | Payslip | A wallet's stock payouts | "What have my memes paid me" |
 | Keep-the-stock quote | Sell into stock or cash | Before any sell |
+| Buy-with-stock quote | Pay with the stock or with cash | Before any buy |
 
 ## Recommended Workflows
 
@@ -48,6 +50,8 @@ It never signs anything itself.
 | "Why is NIUMA down today?" | Coin, then report `fromTheMeme` and `fromTheStock` separately |
 | "What have my memes paid me?" | `baw wallet address --json`, then Payslip for that address |
 | "Sell my NIUMA but keep the stock" | Keep-the-stock quote, confirm, then `baw market-order swap` into the stock token |
+| "Buy NIUMA with my S&P shares" | Buy-with-stock quote, confirm, then `baw market-order swap` from the stock token into the coin |
+| "Put my payouts back into NIUMA" | Payslip for the balance, then the buy above with part of it |
 | "Sweep my stock dust into SPY" | Payslip for the balances, then one `baw market-order swap` per small stock into the target |
 
 ## Key Concept: Two Prices in One Coin
@@ -82,7 +86,7 @@ Set `STOCKYARD_URL` to a running Stockyard server. No API key is needed for thes
 export STOCKYARD_URL=http://localhost:4173
 ```
 
-The same four functions are available as MCP tools: `node mcp/server.mjs`.
+The same functions are available as five MCP tools: `node mcp/server.mjs`.
 
 ## API 1: League
 
@@ -150,6 +154,19 @@ curl "$STOCKYARD_URL/api/quote?from=<coin>&to=0x55d398326f99059fF775485246999027
 
 > ⚠️ `priceImpact` is a fraction: `0.0042` is 0.42%.
 
+## API 5: Buy-with-Stock Quote
+
+The same quote endpoint, the other way round: from the stock token into the coin.
+
+```bash
+curl "$STOCKYARD_URL/api/quote?from=<stock token>&to=<coin>&amount=<smallest units>"
+```
+
+Stock tokens have 18 decimals, so 0.05 shares is `50000000000000000`. To compare with paying
+cash, quote the same dollars from USDT (`shares × stock price`, 18 decimals on BNB Chain).
+
+> ⚠️ The user must already hold the stock token. Check with `baw wallet balance --json` before quoting.
+
 ## Executing with Binance Agentic Wallet
 
 Follow every rule in **binance-agentic-wallet**: check `baw wallet status --json` first, append
@@ -166,7 +183,15 @@ baw market-order list --orderId <orderId> --json   # poll until FINISHED or FAIL
 
 `--fromTokenQty` is in whole coins here, unlike the Stockyard quote.
 
-> ⚠️ Many stock memes take a tax on every trade. Add the coin's sell tax to the slippage, or the
+Buy with the stock:
+
+```bash
+baw market-order quote --fromTokenQty 0.05 --fromToken <stock token> --toToken <coin> --binanceChainId 56 --json
+# show it next to the USDT quote, wait for the user to confirm, then:
+baw market-order swap --fromTokenQty 0.05 --fromToken <stock token> --toToken <coin> --binanceChainId 56 --slippage 3 --json
+```
+
+> ⚠️ Many stock memes take a tax on every trade. Add the coin's buy or sell tax to the slippage, or the
 > swap will fail. If the user did not give a slippage, say which one you are using.
 
 > ⚠️ `baw limit-order sell` can only end in USDT, USDC or the native token. "Sell into the S&P
@@ -175,8 +200,8 @@ baw market-order list --orderId <orderId> --json   # poll until FINISHED or FAIL
 
 ## Notes
 
-1. Coverage is PancakeSwap v2 pools against the bStocks family of tokens. A coin paired with an
-   Ondo token or trading only on another DEX is not in the league yet.
+1. Coverage is PancakeSwap v2 pools against bStocks, pre-IPO and Ondo stock tokens. A coin trading
+   only on another DEX is not in the league yet.
 2. A stock with no USDT pool of at least $500 has no price, so coins paired with it are left out.
 3. The server rescans for new pools every five minutes; a coin can take that long to appear.
 4. Report dollar figures as estimates. They come from pool reserves at the last refresh.

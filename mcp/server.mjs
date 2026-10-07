@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Stockyard as an MCP server: four read-only tools any agent can call over stdio.
+// Stockyard as an MCP server: five read-only tools any agent can call over stdio.
 // It talks to a running Stockyard server, so it needs no keys of its own.
 //
 //   STOCKYARD_URL=https://your-stockyard-host node mcp/server.mjs
@@ -9,6 +9,8 @@ import { createInterface } from 'node:readline';
 
 const BASE = (process.env.STOCKYARD_URL || 'http://localhost:4173').replace(/\/$/, '');
 const ADDRESS = { type: 'string', pattern: '^0x[0-9a-fA-F]{40}$' };
+const USDT = '0x55d398326f99059ff775485246999027b3197955';
+const quote = (from, to, amount) => api(`/api/quote?from=${from}&to=${to}&amount=${amount}`).catch((e) => ({ error: e.message }));
 
 const api = async (path) => {
   const r = await fetch(BASE + path, { signal: AbortSignal.timeout(60000) });
@@ -68,14 +70,36 @@ const tools = [
     },
     async run(a) {
       const d = await api('/api/coin?a=' + a.address), amount = units(a.amount, d.coin.decimals ?? 18);
-      const USDT = '0x55d398326f99059ff775485246999027b3197955';
-      const [keep, cash] = await Promise.all([d.stock.address, USDT].map((to) => api(`/api/quote?from=${a.address}&to=${to}&amount=${amount}`).catch((e) => ({ error: e.message }))));
+      const [keep, cash] = await Promise.all([quote(a.address, d.stock.address, amount), quote(a.address, USDT, amount)]);
       const shares = keep.error ? null : Number(keep.toAmount) / 1e18;
       return {
         selling: { coin: d.coin.symbol, amount: a.amount },
         keepTheStock: keep.error ? keep : { stock: d.stock.name, stockToken: d.stock.address, shares, worthUsd: shares * (d.stock.price || 0), swaps: keep.hops.length - 1, priceImpact: keep.priceImpact },
         takeCash: cash.error ? cash : { usdt: Number(cash.toAmount) / 1e18, swaps: cash.hops.length - 1, priceImpact: cash.priceImpact },
         note: 'priceImpact is a fraction: 0.0042 means 0.42%. To execute, use the Binance Agentic Wallet: baw market-order swap.',
+      };
+    },
+  },
+  {
+    name: 'buy_with_stock_quote',
+    description: 'Quote buying a stock meme by paying with the tokenized stock it trades against, next to paying the same dollars in USDT, through Binance\'s aggregator. Quotes only; it sends nothing.',
+    inputSchema: {
+      type: 'object',
+      properties: { address: { ...ADDRESS, description: 'The coin contract address' }, shares: { type: 'string', description: 'Shares of the stock token to spend, e.g. "0.05"' } },
+      required: ['address', 'shares'],
+    },
+    async run(a) {
+      const d = await api('/api/coin?a=' + a.address), dollars = Number(a.shares) * (d.stock.price || 0);
+      const coins = (q) => Number(q.toAmount) / 10 ** (d.coin.decimals ?? 18);
+      const [stock, cash] = await Promise.all([
+        quote(d.stock.address, a.address, units(a.shares)),
+        dollars > 0 ? quote(USDT, a.address, units(dollars.toFixed(6))) : { error: 'No price for this stock' },
+      ]);
+      return {
+        buying: { coin: d.coin.symbol, with: d.stock.name, stockToken: d.stock.address, shares: a.shares, worthUsd: dollars },
+        payWithTheStock: stock.error ? stock : { coins: coins(stock), swaps: stock.hops.length - 1, priceImpact: stock.priceImpact },
+        payWithCash: cash.error ? cash : { usdt: dollars, coins: coins(cash), swaps: cash.hops.length - 1, priceImpact: cash.priceImpact },
+        note: 'priceImpact is a fraction: 0.0042 means 0.42%. To execute, use the Binance Agentic Wallet: baw market-order swap from the stock token into the coin.',
       };
     },
   },
