@@ -17,6 +17,7 @@ worth $100K or more. Some pay their holders in stock. Until now there was no too
 | `public/payslip.html` · 牛马工资条 | Paste a wallet, print a payslip of every payout it has received in stock tokens, with dates, and the stock memes behind them. Save it as an image. Then put the pay to work: swap part of each stock line back into the coin behind it, or gather small lines into one stock, with a Binance quote and a dry run first. |
 | `skills/stockyard-stock-memes` | A skill in the Binance Skills Hub format that hands execution to Binance Agentic Wallet. |
 | `mcp/server.mjs` | The same data as five MCP tools for any agent. |
+| `server/telegram.mjs` | A Telegram bot: paste a wallet for its payslip, `/league`, `/coin`, `/sell` and `/buy` quotes, and `/watch` for a message each time the wallet is paid in stock. English and 中文. It never holds a key. |
 
 ## Status
 
@@ -53,6 +54,10 @@ node scripts/probe.mjs
 ```
 
 `GET /api/health` reports whether the server can reach Binance from where it runs.
+
+To turn on the Telegram bot, create a bot with [@BotFather](https://t.me/BotFather), put its token
+in `.env` as `TELEGRAM_BOT_TOKEN` and restart the server. It uses long polling, so it works without
+a public address.
 
 Binance checks the caller's location, so run these from a region its
 [restricted list](https://web3.binance.com/en/dev-docs/web3-api-prohibited-regions) allows.

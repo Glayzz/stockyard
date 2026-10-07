@@ -5,6 +5,7 @@ import { extname, join, normalize, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { handle } from './routes.mjs';
 import { rescan } from './league.mjs';
+import { startTelegram } from './telegram.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const pub = join(root, 'public');
@@ -50,3 +51,6 @@ setInterval(warm, 120000);
 const look = () => rescan().then((n) => n && console.log('rescan: ' + n + ' new stock pools'), (e) => console.log('rescan:', e.message));
 look();
 setInterval(look, 300000);
+
+// The Telegram bot runs in this same process when a bot token is set.
+startTelegram();

@@ -4,3 +4,4 @@ data/pairs.bin
 data/stock-pairs.json
 data/stock-pairs-new.json
 data/league-cache.json
+data/telegram.json
