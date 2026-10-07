@@ -28,9 +28,12 @@ Work in progress during the hackathon build window.
 - Working: the league, coin page and payslip on live data, in English and 中文, covering bStocks,
   pre-IPO and Ondo stock tokens; the server rescans PancakeSwap for new pools at start and every
   five minutes. If Binance cannot be reached, the pages still load from BNB Chain and say what is missing.
-- Built, waiting on a first live trade: sell-and-keep-the-stock and buy-with-stock on the coin
-  page, and reinvest on the payslip. Both use one wallet flow: the server prepares the approval and swap through
-  Binance's aggregator and dry-runs them on the Transaction API; the user's own wallet signs.
+- Traded live on BNB Chain mainnet: on 7 Oct 2026 a wallet sold 100 NIUMA through the coin page
+  and received 0.000124 SPYB (tokenized S&P 500), routed by Binance's aggregator, in
+  [this transaction](https://bscscan.com/tx/0x6eb3cea632d3e97a17089c1a1576f68f2e84e560161e4cab2e3734a462b37f74).
+- Built on the same flow: buy-with-stock on the coin page, and reinvest on the payslip. Both use one wallet flow: one button, then the wallet asks for each signature in turn and a
+  receipt prints at the end. The server prepares the approval and swap through Binance's
+  aggregator and checks them on the Transaction API first; the user's own wallet signs.
   The server never holds a key.
 - Next: a data agent on BNB Agent Studio with b402 pay-per-call.
 

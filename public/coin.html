@@ -80,12 +80,13 @@
         <tbody id="pools"></tbody>
       </table>
     </div>
-    <p class="note" data-zh="池子数据读自 BNB Chain。价格、小时级历史、成交、池子、报价、模拟执行和股票资料来自币安 Web3 API。交易税来自 GoPlus。美股开盘时间未考虑公共假期。">The pool is read from BNB Chain. Prices, hourly history, trades, pools, quotes, the dry run and the stock's profile come from the Binance Web3 API. Coin tax comes from GoPlus. US market hours ignore public holidays.</p>
+    <p class="note" data-zh="池子数据读自 BNB Chain。价格、小时级历史、成交、池子、报价、交易前的安全检查和股票资料来自币安 Web3 API。交易税来自 GoPlus。美股开盘时间未考虑公共假期。">The pool is read from BNB Chain. Prices, hourly history, trades, pools, quotes, the safety check before each trade and the stock's profile come from the Binance Web3 API. Coin tax comes from GoPlus. US market hours ignore public holidays.</p>
   </div>
   <div class="state" id="state" data-zh="正在加载">Loading coin</div>
 </div>
 
 <script src="shared.js"></script>
+<script src="trade.js"></script>
 <script>
 initLang();
 const addr = (new URLSearchParams(location.search).get('a') || NIUMA).toLowerCase();
@@ -305,19 +306,20 @@ function renderSell() {
   trade.render();
 }
 
-// The trade itself runs through the shared wallet flow: connect, check, approve, dry run, send.
+// The trade itself runs through the shared wallet flow in trade.js.
 const trade = tradeFlow($('trade'), () => {
   if (!S.quotes || S.quotes.keep.error) return null;
-  const { coin, stock } = S.d;
+  const { coin, stock } = S.d, dec = coin.decimals ?? 18, name = stockName(stock);
+  const coins = { symbol: coin.symbol, decimals: dec, text: (n) => full(n) + ' ' + coin.symbol, usd: coin.price };
+  const shares = { symbol: name, decimals: 18, text: (n) => (zh ? `${num(n)} 股 ${name}` : `${num(n)} ${stock.name} shares`), usd: stock.price || 0 };
+  const typed = Number(S.quotes.amount) / 10 ** (S.quotes.side === 'buy' ? 18 : dec);
   if (S.quotes.side === 'buy') return {
-    from: stock.address, to: addr, amount: S.quotes.amount, slippage: 3 + (S.buyTax || 0) * 100, symbol: stockName(stock),
-    receive: (units) => t('about ', '约 ') + num(Number(units) / 10 ** (coin.decimals ?? 18)) + ' ' + coin.symbol,
-    action: t('Buy with ' + stock.name, '用' + stockName(stock) + '买入'), done: t('Done. The coin is in your wallet.', '完成。币已到你的钱包。'),
+    from: stock.address, to: addr, amount: S.quotes.amount, slippage: 3 + (S.buyTax || 0) * 100, spend: shares, receive: coins,
+    action: zh ? `用 ${shares.text(typed)} 买入 ${coin.symbol}` : `Buy ${coin.symbol} with ${shares.text(typed)}`,
   };
   return {
-    from: addr, to: stock.address, amount: S.quotes.amount, slippage: 3 + (S.sellTax || 0) * 100, symbol: coin.symbol,
-    receive: (units) => { const out = Number(units) / 1e18; return zh ? `约 ${num(out)} 股 ${stockName(stock)}` : `about ${num(out)} ${stock.name} shares`; },
-    action: t('Sell and keep the stock', '卖出并留下股票'), done: t('Done. The stock is in your wallet.', '完成。股票已到你的钱包。'),
+    from: addr, to: stock.address, amount: S.quotes.amount, slippage: 3 + (S.sellTax || 0) * 100, spend: coins, receive: shares,
+    action: zh ? `卖出 ${coins.text(typed)}，留下股票` : `Sell ${coins.text(typed)}, keep the stock`,
   };
 });
 

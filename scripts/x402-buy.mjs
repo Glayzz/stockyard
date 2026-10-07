@@ -12,6 +12,7 @@
 import { randomBytes } from 'node:crypto';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import '../server/net.mjs';
 
 const KEYFILE = fileURLToPath(new URL('../data/x402-buyer.json', import.meta.url));
 const RPC = 'https://bsc-rpc.publicnode.com';

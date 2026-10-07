@@ -1,6 +1,7 @@
 // Signed client for the Binance Web3 API, following https://web3.binance.com/en/dev-docs/authentication.
 // The signed path must carry the /build prefix and the query exactly as sent (spaces as %20, not +).
 import { createHmac } from 'node:crypto';
+import './net.mjs';
 
 const BASE = 'https://web3.binance.com', PREFIX = '/build';
 const OK = new Set([0, '0', '000000000']);

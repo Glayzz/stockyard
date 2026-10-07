@@ -71,6 +71,7 @@
 </div>
 
 <script src="shared.js"></script>
+<script src="trade.js"></script>
 <script>
 initLang();
 const P = { data: null };
@@ -265,10 +266,12 @@ async function renderReinvest() {
     box.append(row, r.box);
     const amount = (units) => num(Number(units) / 10 ** r.toDecimals);
     r.receive = (units) => r.coin ? t('about ', '约 ') + amount(units) + ' ' + r.toName : zh ? `约 ${amount(units)} 股 ${r.toName}` : `about ${amount(units)} ${r.toName} shares`;
+    const sharesOf = (name) => (n) => (zh ? `${num(n)} 股 ${name}` : `${num(n)} ${name} shares`);
     r.flow = tradeFlow(r.box, () => r.quote && R.open === r ? {
-      from: r.line.address, to: r.to, amount: r.amount, slippage: 3 + (r.tax?.buy || 0) * 100, symbol: stockName(r.line), owner: d.wallet,
-      receive: r.receive, action: t('Reinvest', '复投'),
-      done: r.coin ? t('Done. The coin is in your wallet.', '完成。币已到你的钱包。') : t('Done. The stock is in your wallet.', '完成。股票已到你的钱包。'),
+      from: r.line.address, to: r.to, amount: r.amount, slippage: 3 + (r.tax?.buy || 0) * 100, owner: d.wallet,
+      spend: { symbol: stockName(r.line), decimals: 18, text: sharesOf(stockName(r.line)), usd: r.line.price },
+      receive: r.coin ? { decimals: r.toDecimals, text: (n) => full(n) + ' ' + r.toName, usd: 0 } : { decimals: 18, text: sharesOf(r.toName), usd: d.lines[0].price },
+      action: zh ? `把 ${sharesOf(stockName(r.line))(shares)} 换成 ${r.toName}` : `Swap ${sharesOf(stockName(r.line))(shares)} into ${r.toName}`,
     } : null);
     r.go.onclick = () => { R.open = r; for (const x of rows) { x.box.hidden = x !== r; x.flow.render(); } };
     if (r.coin) coinTax(r.to).then((tax) => { r.tax = tax; });

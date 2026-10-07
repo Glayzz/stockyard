@@ -5,6 +5,7 @@
 // signed on the site in the user's own wallet.
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import './net.mjs';
 import { handle } from './routes.mjs';
 import { status } from './status.mjs';
 import { slipImage } from './slip-image.mjs';

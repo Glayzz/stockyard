@@ -1,4 +1,5 @@
 // Read-only BNB Chain access over public nodes, batched through Multicall3.
+import './net.mjs';
 // Which nodes answer depends on where the server runs: some networks and DNS filters block the
 // bnbchain.org ones. Each was checked with a 500-call batched read.
 const RPCS = [
@@ -11,13 +12,14 @@ const MULTICALL = '0xca11bde05977b3631167028862be2a173976ca11';
 const restUntil = new Map();
 let turn = 0;
 
-// The next node to ask: round-robin, skipping any that failed in the last while.
+// The node to ask: stay with one while it works, so its connections stay open and warm, and move
+// to the next only when it fails or throttles.
 function pick() {
   for (let i = 0; i < RPCS.length; i++) {
-    const url = RPCS[turn++ % RPCS.length];
-    if ((restUntil.get(url) || 0) <= Date.now()) return url;
+    const at = (turn + i) % RPCS.length;
+    if ((restUntil.get(RPCS[at]) || 0) <= Date.now()) { turn = at; return RPCS[at]; }
   }
-  return RPCS[turn++ % RPCS.length];
+  return RPCS[turn];
 }
 
 export const word = (n) => BigInt(n).toString(16).padStart(64, '0');
