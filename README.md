@@ -17,6 +17,8 @@ worth $100K or more. Some pay their holders in stock. Until now there was no too
 | `public/payslip.html` · 牛马工资条 | Paste a wallet, print a payslip of every payout it has received in stock tokens, with dates, and the stock memes behind them. Save it as an image. Then put the pay to work: swap part of each stock line back into the coin behind it, or gather small lines into one stock, with a Binance quote and a dry run first. |
 | `skills/stockyard-stock-memes` | A skill in the Binance Skills Hub format that hands execution to Binance Agentic Wallet. |
 | `mcp/server.mjs` | The same data as five MCP tools for any agent. |
+| `server/paid.mjs` · `/x402` | The same data sold to agents per call over x402, settled through Binance's B402: one cent for the league or a coin, two for a payslip. `GET /x402` is the free catalogue. Each settled call also lists the resource in B402's Bazaar. |
+| `scripts/x402-buy.mjs` | An agent paying for that data with no SDK: about 150 lines that take the 402, sign an EIP-3009 authorization and call again. The buyer needs no BNB. |
 | `server/telegram.mjs` | A Telegram bot: paste a wallet for its payslip, `/league`, `/coin`, `/sell` and `/buy` quotes, and `/watch` for a message each time the wallet is paid in stock. English and 中文. It never holds a key. |
 
 ## Status
@@ -32,7 +34,7 @@ Work in progress during the hackathon build window.
   The server never holds a key.
 - Next: a data agent on BNB Agent Studio with b402 pay-per-call.
 
-Binance Web3 API modules in use: RWA Data, Market, Trading, Transaction, Wallet.
+Binance Web3 API modules in use: RWA Data, Market, Trading, Transaction, Wallet, B402 Payments.
 
 ## Run it
 
@@ -54,6 +56,18 @@ node scripts/probe.mjs
 ```
 
 `GET /api/health` reports whether the server can reach Binance from where it runs.
+
+To sell data over x402, finish the B402 Payments application in the developer portal, use a key
+with the B402 Payments permission, and put the receiving address from that application in `.env`
+as `B402_PAY_TO`. Then try it as a buyer:
+
+```bash
+node scripts/x402-buy.mjs wallet
+node scripts/x402-buy.mjs "http://localhost:4173/x402/league?stock=SPY"
+```
+
+The first command makes a throwaway buyer wallet and prints its address; send it a few cents of U
+or USD1. The second pays one cent and prints the answer and the settlement transaction.
 
 To turn on the Telegram bot, create a bot with [@BotFather](https://t.me/BotFather), put its token
 in `.env` as `TELEGRAM_BOT_TOKEN` and restart the server. It uses long polling, so it works without

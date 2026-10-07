@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { handle } from './routes.mjs';
 import { rescan } from './league.mjs';
 import { startTelegram } from './telegram.mjs';
+import { paid } from './paid.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const pub = join(root, 'public');
@@ -19,6 +20,12 @@ const send = (res, status, type, body) => { res.writeHead(status, { 'content-typ
 
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
+  // Paid data for agents: x402, settled through Binance's B402.
+  if (url.pathname === '/x402' || url.pathname.startsWith('/x402/')) {
+    const out = await paid(req, url).catch((err) => ({ status: 502, headers: {}, json: { error: err.message } }));
+    res.writeHead(out.status, { 'content-type': 'application/json', 'cache-control': 'no-store', ...out.headers });
+    return res.end(JSON.stringify(out.json));
+  }
   if (url.pathname.startsWith('/api/')) {
     let body;
     if (req.method === 'POST') {

@@ -5,3 +5,5 @@ data/stock-pairs.json
 data/stock-pairs-new.json
 data/league-cache.json
 data/telegram.json
+data/b402-ledger.jsonl
+data/x402-buyer.json
