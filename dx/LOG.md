@@ -22,3 +22,7 @@
 - 2026-10-06T22:32:15.549Z call FAILED /api/v1/dex/market/rwa/platforms in 10803 ms: UND_ERR_CONNECT_TIMEOUT fetch failed
 - 2026-10-06 Reliability: when the connection to web3.binance.com drops, every signed call waits about 10 seconds for a connect timeout, so a page that makes ten calls hangs. Added a breaker: after one connect failure, calls fail at once and a background check every 30 seconds restores them.
 - 2026-10-06 Wallet: reading one wallet's balance of 534 stock tokens through Multicall3 is a 120 KB request. On a slow uplink that alone is about 10 seconds; the Wallet API's 20-token limit would make it 27 signed calls instead.
+- 2026-10-07T01:52:07.954Z call OK /api/v1/dex/market/rwa/platforms in 1309 ms
+- 2026-10-07 Infra: with a VPN on (Windscribe, Germany) the Binance API works, but the VPN's DNS filter answers 0.0.0.0 for bsc-dataseed*.bnbchain.org, so five of our six chain nodes died at once. Without the VPN it is the reverse: the chain works and Binance does not. Fixed with a wider node list and resting nodes that fail.
+- 2026-10-07 Trading: aggregator/quote routes a stock token into a Flap stock meme too (SPYB > NIUMA in one hop through LiquidMesh, 0.37% impact for $70). pre-transaction/simulate passed the approval for a wallet we do not control, so the dry run needs no signature.
+- 2026-10-07 Wallet: transactions-by-address is the slow call, about 1 to 3 seconds per 100 rows. Twelve of them in a row made one payslip take 57 seconds; three at a time alongside the chain read brought it to 11.

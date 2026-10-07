@@ -1,10 +1,24 @@
 // Read-only BNB Chain access over public nodes, batched through Multicall3.
+// Which nodes answer depends on where the server runs: some networks and DNS filters block the
+// bnbchain.org ones. Each was checked with a 500-call batched read.
 const RPCS = [
-  'https://bsc-dataseed.bnbchain.org', 'https://bsc-dataseed1.bnbchain.org', 'https://bsc-dataseed2.bnbchain.org',
-  'https://bsc-dataseed3.bnbchain.org', 'https://bsc-dataseed4.bnbchain.org', 'https://bsc-rpc.publicnode.com',
+  'https://bsc-rpc.publicnode.com', 'https://bsc-dataseed.bnbchain.org', 'https://bsc-dataseed1.defibit.io',
+  'https://bsc-dataseed1.bnbchain.org', 'https://bsc-dataseed1.ninicoin.io', 'https://bsc-mainnet.public.blastapi.io',
+  'https://bsc-dataseed2.bnbchain.org', 'https://bsc-dataseed2.defibit.io', 'https://rpc-bsc.48.club',
+  'https://bsc-dataseed3.bnbchain.org', 'https://bsc-dataseed2.ninicoin.io', 'https://bsc.blockrazor.xyz',
 ];
 const MULTICALL = '0xca11bde05977b3631167028862be2a173976ca11';
+const restUntil = new Map();
 let turn = 0;
+
+// The next node to ask: round-robin, skipping any that failed in the last while.
+function pick() {
+  for (let i = 0; i < RPCS.length; i++) {
+    const url = RPCS[turn++ % RPCS.length];
+    if ((restUntil.get(url) || 0) <= Date.now()) return url;
+  }
+  return RPCS[turn++ % RPCS.length];
+}
 
 export const word = (n) => BigInt(n).toString(16).padStart(64, '0');
 export const addrWord = (a) => a.replace(/^0x/, '').toLowerCase().padStart(64, '0');
@@ -20,11 +34,13 @@ export function toText(hex) {
   try { return new TextDecoder('utf-8', { fatal: false }).decode(Uint8Array.from(bytes.match(/../g) || [], (b) => parseInt(b, 16))); } catch { return ''; }
 }
 
-// One JSON-RPC call, rotating through the nodes and retrying with a pause when one fails or throttles.
-export async function rpc(method, params, tries = 5) {
+// One JSON-RPC call, rotating through the nodes. A node that cannot be reached is rested for two
+// minutes and one that throttles for twenty seconds, so later calls go straight to the ones that work.
+export async function rpc(method, params, tries = 8) {
   let last;
   for (let i = 0; i < tries; i++) {
-    const url = RPCS[turn++ % RPCS.length];
+    const url = pick();
+    let pause = 300 * (i + 1);
     try {
       const r = await (await fetch(url, {
         method: 'POST', headers: { 'content-type': 'application/json' }, signal: AbortSignal.timeout(30000),
@@ -32,8 +48,13 @@ export async function rpc(method, params, tries = 5) {
       })).json();
       if (typeof r.result === 'string') return r.result;
       last = r.error?.message || 'bad reply';
-    } catch (e) { last = e.message; }
-    await new Promise((res) => setTimeout(res, 250 * (i + 1)));
+      restUntil.set(url, Date.now() + 20000);
+    } catch (e) {
+      last = e.cause?.code || e.message;
+      restUntil.set(url, Date.now() + 120000);
+      pause = 50;
+    }
+    await new Promise((res) => setTimeout(res, pause));
   }
   throw new Error('BNB Chain nodes failed: ' + last);
 }
