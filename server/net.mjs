@@ -20,23 +20,51 @@ net.setDefaultAutoSelectFamilyAttemptTimeout?.(5000);
 const groups = process.env.STOCKYARD_TLS_GROUPS || 'X25519:P-256:P-384';
 if (groups !== 'auto') tls.DEFAULT_ECDH_CURVE = groups;
 
-// 4. On a slow or filtered resolver, looking a name up can fail one moment and work the next
-//    ("getaddrinfo EAI_AGAIN"). A lookup that fails is tried again up to three more times, and a
-//    name that resolved is remembered for five minutes, so one bad moment does not end a request.
+// 4. Looking a name up can fail for a moment on a slow resolver ("getaddrinfo EAI_AGAIN": no
+//    answer, try again). When this machine's resolver gives no answer, the name is asked of two
+//    public resolvers instead, first directly and then over HTTPS, and a lookup that still fails
+//    is tried again twice. A name that resolved is remembered for five minutes. A resolver that
+//    answers "no such name" is believed: only silence is worked around.
+// The machine's own lookup, kept before it is replaced below.
+const osLookup = dns.lookup;
 const known = new Map();
+// Made only when first needed, so a process that never needs it carries nothing extra.
+let publicDns = null;
+const resolver = () => { if (!publicDns) { publicDns = new dns.Resolver({ timeout: 2500, tries: 2 }); publicDns.setServers(['1.1.1.1', '8.8.8.8']); } return publicDns; };
+async function elsewhere(hostname) {
+  try {
+    const list = await new Promise((ok, no) => resolver().resolve4(hostname, (err, found) => (err ? no(err) : ok(found))));
+    if (list.length) return list;
+  } catch {}
+  // The two resolvers again, by address over HTTPS, for networks where plain DNS to them is lost.
+  for (const url of [`https://1.1.1.1/dns-query?name=${hostname}&type=A`, `https://8.8.8.8/resolve?name=${hostname}&type=A`]) {
+    try {
+      const r = await fetch(url, { headers: { accept: 'application/dns-json' }, signal: AbortSignal.timeout(6000) });
+      const list = ((await r.json()).Answer || []).filter((x) => x.type === 1).map((x) => x.data);
+      if (list.length) return list;
+    } catch {}
+  }
+  return [];
+}
 function lookup(hostname, options, callback) {
   if (typeof options === 'function') { callback = options; options = {}; }
   const key = `${hostname}|${options.family || 0}|${options.all ? 'all' : 'one'}`;
   const hit = known.get(key);
   if (hit && Date.now() - hit.at < 300000) return process.nextTick(() => callback(null, ...hit.found));
   let tries = 0;
-  const ask = () => dns.lookup(hostname, options, (err, ...found) => {
-    if (err && ++tries < 4 && (err.code === 'EAI_AGAIN' || err.code === 'ENOTFOUND')) return setTimeout(ask, 700 * tries);
-    if (!err) known.set(key, { at: Date.now(), found });
-    callback(err, ...found);
+  const done = (found) => { known.set(key, { at: Date.now(), found }); callback(null, ...found); };
+  const ask = () => osLookup(hostname, options, async (err, ...found) => {
+    if (!err) return done(found);
+    if (err.code !== 'EAI_AGAIN' || options.family === 6) return callback(err);
+    const list = await elsewhere(hostname);
+    if (list.length) return done(options.all ? [list.map((address) => ({ address, family: 4 }))] : [list[0], 4]);
+    if (++tries < 3) return setTimeout(ask, 800 * tries);
+    callback(err);
   });
   ask();
 }
+// Every connection this process opens looks names up this way, whichever library opens it.
+dns.lookup = lookup;
 
 // A second pool for the Telegram bot's replies. It keeps a connection open for twenty seconds, so a
 // run of taps does not pay for a new connection each time, and closes it before Telegram would.
