@@ -6,7 +6,7 @@
 // signed on the site in the user's own wallet.
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import './net.mjs';
+import { oneShot } from './net.mjs';
 import { handle } from './routes.mjs';
 import { status } from './status.mjs';
 import { slipImage } from './slip-image.mjs';
@@ -45,15 +45,28 @@ async function api(path, query) {
   return json;
 }
 
+// The long poll waits on purpose. Every other call should be quick, so one that hangs is cut short
+// and tried again, up to three times, each on a connection of its own. An answer from Telegram,
+// even a refusal, is final; only a call that never got through is repeated.
 async function tg(method, body) {
-  const form = body instanceof FormData;
-  const r = await fetch(`${base}/bot${token}/${method}`, {
-    method: 'POST', body: form ? body : JSON.stringify(body || {}), signal: AbortSignal.timeout(form ? 120000 : 40000),
-    ...(!form && { headers: { 'content-type': 'application/json' } }),
-  });
-  const j = await r.json();
-  if (!j.ok) throw Object.assign(new Error(j.description || 'Telegram answered ' + r.status), { code: j.error_code });
-  return j.result;
+  const form = body instanceof FormData, poll = method === 'getUpdates';
+  const limit = poll ? 40000 : form ? 30000 : 12000;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const r = await fetch(`${base}/bot${token}/${method}`, {
+        method: 'POST', body: form ? body : JSON.stringify(body || {}), signal: AbortSignal.timeout(limit),
+        ...(!form && { headers: { 'content-type': 'application/json' } }),
+        ...(!poll && oneShot && { dispatcher: oneShot }),
+      });
+      const j = await r.json();
+      if (!j.ok) throw Object.assign(new Error(j.description || 'Telegram answered ' + r.status), { code: j.error_code, said: true });
+      return j.result;
+    } catch (err) {
+      if (err.said || poll || attempt === 3) throw err;
+      console.log(`telegram: ${method} did not get through (${err.cause?.code || err.name}), trying again`);
+      await sleep(400 * attempt);
+    }
+  }
 }
 
 // ---- how a screen reaches the chat ----
@@ -435,11 +448,17 @@ async function onUpdate(u) {
   const ctx = { chat, c, msg: cb?.message?.message_id ?? null, photo: Boolean(cb?.message?.photo) };
   if (cb) tg('answerCallbackQuery', { callback_query_id: cb.id }).catch(() => {});
   if (tooFast(chat)) return recent.get(chat).length === 13 ? send(chat, c.lang === 'zh' ? stack('⏳ <b>太快了</b>', '', '请等一分钟再继续。') : stack('⏳ <b>Too fast</b>', '', 'Give it a minute, then carry on.')) : null;
+  // What was asked, for the log: a command by name, a tap by its kind, never what a person typed.
+  const what = msg?.text ? (msg.text.startsWith('/') ? msg.text.split(/[\s@]/)[0].slice(0, 16) : 'a message') : 'tap ' + String(cb?.data || '').split(':')[0];
+  const began = Date.now();
   try {
     if (msg?.text) await onText(ctx, msg.text);
     else if (cb?.data) await onTap(ctx, cb.data);
+    status.telegramAnsweredAt = new Date().toISOString();
+    console.log(`telegram: ${what} answered in ${Date.now() - began} ms`);
   } catch (err) {
-    console.log('telegram:', err.message);
+    status.telegramError = { at: new Date().toISOString(), what, message: String(err.message).slice(0, 120) };
+    console.log(`telegram: ${what} failed after ${Date.now() - began} ms: ${err.message}`);
     await send(chat, stack(c.lang === 'zh' ? '⚠️ <b>出错了</b>' : '⚠️ <b>That did not work</b>', '', esc(err.message), '', c.lang === 'zh' ? '请再试一次，或回到首页。' : 'Try again, or go back Home.'), [[btn(c.lang === 'zh' ? '🏠 首页' : '🏠 Home', 'hn')]]).catch(() => {});
   }
 }

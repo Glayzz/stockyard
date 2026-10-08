@@ -12,6 +12,10 @@ import tls from 'node:tls';
 const groups = process.env.STOCKYARD_TLS_GROUPS || 'X25519:P-256:P-384';
 if (groups !== 'auto') tls.DEFAULT_ECDH_CURVE = groups;
 
+// A second pool that never reuses a connection, for calls that must not be handed one that has
+// gone quiet: the Telegram bot's replies. It stays null if the pool class cannot be found.
+export let oneShot = null;
+
 // Node's fetch reads its connection pool from this well-known slot. Node does not expose the pool
 // class by name, so a replacement is built from the one already there; if that ever stops
 // working, fetch simply keeps its defaults.
@@ -19,5 +23,8 @@ try {
   const slot = Symbol.for('undici.globalDispatcher.1');
   await fetch('data:,'); // the pool only exists once fetch has been used
   const Pool = globalThis[slot]?.constructor;
-  if (Pool) globalThis[slot] = new Pool({ keepAliveTimeout: 60000, keepAliveMaxTimeout: 300000 });
+  if (Pool) {
+    globalThis[slot] = new Pool({ keepAliveTimeout: 60000, keepAliveMaxTimeout: 300000 });
+    oneShot = new Pool({ pipelining: 0 });
+  }
 } catch {}

@@ -28,7 +28,7 @@ const routes = {
   'GET /api/health': async () => ({
     ok: true,
     binance: await bw3('/api/v1/dex/market/supported/chain').then(() => 'reachable', (e) => 'unreachable: ' + e.message),
-    telegram: parts.telegram ? { bot: parts.telegram, lastPolled: parts.telegramPolledAt } : 'off',
+    telegram: parts.telegram ? { bot: parts.telegram, lastPolled: parts.telegramPolledAt, lastAnswered: parts.telegramAnsweredAt, lastError: parts.telegramError } : 'off',
     paidData: process.env.B402_PAY_TO ? 'on' : 'off',
   }),
 
