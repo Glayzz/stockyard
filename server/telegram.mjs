@@ -533,8 +533,10 @@ export async function startTelegram() {
       '股票 Meme 是 BNB Chain 上与真实美股配对交易的 Meme 币，其中一些会用这只股票给持有人发工资。', '',
       '打印任意钱包的牛马工资条，查看排行榜、查价，发薪时收到通知。本机器人不持有任何私钥，也无法交易。',
     ].join('\n') });
-    await tg('setMyShortDescription', { short_description: 'Payslips, league and payday alerts for stock memes on BNB Chain. Holds no keys.' });
-    await tg('setMyShortDescription', { language_code: 'zh', short_description: 'BNB Chain 股票 Meme 的工资条、排行榜和发薪提醒。不持有私钥。' });
+    // The bio, at most 120 characters, ends with the site's address when the server knows it.
+    const where = site ? ' ' + site.replace(/^https?:\/\//, '') : '';
+    await tg('setMyShortDescription', { short_description: ('Stock memes on BNB Chain: payslips, league and payday alerts. Holds no keys.' + where).slice(0, 120) });
+    await tg('setMyShortDescription', { language_code: 'zh', short_description: ('BNB Chain 股票 Meme：工资条、排行榜和发薪提醒。不持有私钥。' + where).slice(0, 120) });
   })().catch((err) => console.log('Telegram profile setup:', err.message));
 
   setInterval(() => payday().catch(() => {}), 300000).unref();
