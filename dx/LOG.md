@@ -106,3 +106,10 @@
   - https://web3.binance.com/en/dev-docs/products/b402-api/error-codes lists insufficient_funds among the verify reasons without saying when each is returned; a correctly signed payment from an empty wallet got invalid_transaction_state.
 - Two earlier notes were my own mistakes, not the docs': the reference does show token/basic-info taking its parameters in the query string, and the B402 integration guide does warn that the body must be wrapped as {"body": ...}. The B402 token addresses are also listed, on the payment methods page; it is only the `supported` response that leaves them out.
 - The page that mattered most stays https://web3.binance.com/en/dev-docs/authentication.
+
+## 8 Oct 2026 · a balance that does not match the chain, and why
+
+- After the Agentic Wallet trade, `baw wallet balance` and `baw market-order list` both say the wallet received and holds 0.0009341771641556 SPYB. On-chain, `balanceOf` for the wallet (0x9d14bAFe1d10066eE91d68844Eb4e5aabd3a0bD5) on SPYB (0x7138b48df7d98d7e3cc221bfe7192d0a178182d8) is 0.000932564022335925, the same as the Transfer event in the swap (0xf50fecf7…1b31). Binance's figure is 1.00173 times the chain's.
+- The RWA Data API shows the same ratio from the other side: for SPYB it returned tokenPrice 773.32 and a reference price of 771.98, which is also 1.00173. So one SPYB token stands for about 1.00173 shares, the wallet tools count in shares and the chain counts in tokens. Nothing in the trading or wallet docs I read says which unit a quantity is in.
+- In the same swap the route delivered 0.000937250 SPYB and 0.000004686 of it (0.5%) went to another address before the wallet got its part: the Binance Wallet trading fee, taken in the token bought.
+- The docs index lists a rate-limits guide, so the 429 I hit on B402 verify was a documented kind of limit; I had not read that page.
