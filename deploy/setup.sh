@@ -15,16 +15,20 @@ set -euo pipefail
 REPO=${STOCKYARD_REPO:-https://github.com/Glayzz/stockyard.git}
 DIR=/opt/stockyard
 
+# The address-based name, on AWS. With a real domain in use it keeps working as a redirect.
+token=$(curl -fsS -m 5 -X PUT http://169.254.169.254/latest/api/token -H 'X-aws-ec2-metadata-token-ttl-seconds: 60' 2>/dev/null || true)
+ip=$(curl -fsS -m 5 -H "X-aws-ec2-metadata-token: $token" http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null || true)
+IP_HOST=${ip:+${ip//./-}.sslip.io}
+
 HOSTFILE=/etc/stockyard-host
 if [ -n "${STOCKYARD_HOST:-}" ]; then
   echo "$STOCKYARD_HOST" | sudo tee "$HOSTFILE" >/dev/null
 elif [ -f "$HOSTFILE" ]; then
   STOCKYARD_HOST=$(cat "$HOSTFILE")
 else
-  token=$(curl -fsS -m 5 -X PUT http://169.254.169.254/latest/api/token -H 'X-aws-ec2-metadata-token-ttl-seconds: 60')
-  ip=$(curl -fsS -m 5 -H "X-aws-ec2-metadata-token: $token" http://169.254.169.254/latest/meta-data/public-ipv4)
-  STOCKYARD_HOST=${ip//./-}.sslip.io
+  STOCKYARD_HOST=$IP_HOST
 fi
+[ -n "$STOCKYARD_HOST" ] || { echo "No address found for this server. Run again with STOCKYARD_HOST=your.domain"; exit 1; }
 echo "== Setting up https://$STOCKYARD_HOST"
 
 LOG=$HOME/stockyard-setup.log
@@ -91,6 +95,13 @@ $STOCKYARD_HOST {
 	reverse_proxy localhost:4173
 }
 CADDY
+if [ -n "$IP_HOST" ] && [ "$IP_HOST" != "$STOCKYARD_HOST" ]; then
+  sudo tee -a /etc/caddy/Caddyfile >/dev/null <<CADDY
+$IP_HOST {
+	redir https://$STOCKYARD_HOST{uri}
+}
+CADDY
+fi
 sudo systemctl reload caddy || sudo systemctl restart caddy
 
 for _ in $(seq 1 30); do
