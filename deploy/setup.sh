@@ -4,7 +4,9 @@
 #
 # The site's name is the server's public address written with dashes under sslip.io
 # (13.250.1.2 becomes 13-250-1-2.sslip.io), so HTTPS works without buying a domain.
-# To use a real domain, point it at the server and set STOCKYARD_HOST=your.domain first.
+# To use a real domain, point it at the server and run once with STOCKYARD_HOST=your.domain;
+# the name is remembered for later runs. A B402 seller needs one: Binance turns away payment
+# checks that mention an sslip.io address.
 #
 # The keys are never in the repository. Upload your .env to ~/stockyard.env before running this
 # and it is moved into place, readable by this user only.
@@ -13,7 +15,12 @@ set -euo pipefail
 REPO=${STOCKYARD_REPO:-https://github.com/Glayzz/stockyard.git}
 DIR=/opt/stockyard
 
-if [ -z "${STOCKYARD_HOST:-}" ]; then
+HOSTFILE=/etc/stockyard-host
+if [ -n "${STOCKYARD_HOST:-}" ]; then
+  echo "$STOCKYARD_HOST" | sudo tee "$HOSTFILE" >/dev/null
+elif [ -f "$HOSTFILE" ]; then
+  STOCKYARD_HOST=$(cat "$HOSTFILE")
+else
   token=$(curl -fsS -m 5 -X PUT http://169.254.169.254/latest/api/token -H 'X-aws-ec2-metadata-token-ttl-seconds: 60')
   ip=$(curl -fsS -m 5 -H "X-aws-ec2-metadata-token: $token" http://169.254.169.254/latest/meta-data/public-ipv4)
   STOCKYARD_HOST=${ip//./-}.sslip.io
