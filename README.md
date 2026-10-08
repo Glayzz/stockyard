@@ -28,7 +28,7 @@ worth $100K or more. Some pay their holders in stock. Until now there was no too
 
 ## Status
 
-Work in progress during the hackathon build window.
+Built during the hackathon build window, 16 September to 11 October 2026, and live.
 
 - Working: the league, coin page and payslip on live data, in English and 中文, covering bStocks,
   pre-IPO and Ondo stock tokens; the server rescans PancakeSwap for new pools at start and every
