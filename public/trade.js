@@ -8,9 +8,36 @@
 //     spend:   { symbol, decimals, text(n) },      what leaves the wallet
 //     receive: { decimals, text(n), usd } }        what arrives, and its dollar price per unit
 let WALLET = null;
+// The wallet in use: the one built into this browser, or one reached over WalletConnect.
+let PROVIDER = window.ethereum || null, WC = null;
 const FLOWS = new Set();
 const TRANSFER = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
-if (window.ethereum?.on) window.ethereum.on('accountsChanged', (list) => { WALLET = list[0] || null; for (const f of FLOWS) { f.clear(); f.render(); } });
+const PHONE = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+const onAccounts = (list) => { WALLET = list[0] || null; for (const f of FLOWS) { f.clear(); f.render(); } };
+if (window.ethereum?.on) window.ethereum.on('accountsChanged', onAccounts);
+
+// WalletConnect reaches any wallet app from an ordinary browser: a list of wallets on a phone,
+// a QR code on a computer. Its code is 2 MB (public/vendor, built from
+// @walletconnect/ethereum-provider), so it is only fetched when someone asks for it.
+const remember = (on) => { try { on ? localStorage.setItem('stockyard:wc', '1') : localStorage.removeItem('stockyard:wc'); } catch {} };
+async function walletConnect() {
+  if (WC) return WC;
+  const { EthereumProvider } = await import('./vendor/walletconnect.js');
+  const wc = await EthereumProvider.init({
+    projectId: WALLETCONNECT_ID, optionalChains: [56], showQrModal: true,
+    rpcMap: { 56: 'https://bsc-rpc.publicnode.com' },
+    metadata: { name: 'Stockyard', description: 'The home for stock memes on BNB Chain', url: location.origin, icons: [] },
+  });
+  wc.on('accountsChanged', (list) => { if (PROVIDER === wc) onAccounts(list); });
+  wc.on('disconnect', () => { remember(false); if (PROVIDER === wc) { PROVIDER = window.ethereum || null; onAccounts([]); } });
+  return (WC = wc);
+}
+// Coming back from the wallet app, a phone may reload this page: pick the connection up again.
+try {
+  if (WALLETCONNECT_ID && localStorage.getItem('stockyard:wc')) walletConnect().then((wc) => {
+    if (wc.session && wc.accounts[0]) { PROVIDER = wc; onAccounts(wc.accounts); } else remember(false);
+  }, () => {});
+} catch {}
 
 function tradeFlow(box, job) {
   // plan: what the server prepared. stage: where a running trade has got to.
@@ -55,8 +82,7 @@ function tradeFlow(box, job) {
     if (stage) { steps(stage.step, stage.two); say(stage.text); return; }
     if (note) say(note.text, note.bad ? 'down' : null);
     if (!j) return;
-    if (!window.ethereum) { noWallet(j); return; }
-    if (!WALLET) { button(t('Connect wallet', '连接钱包'), connect); return; }
+    if (!WALLET) { howToConnect(j); return; }
     if (j.owner && j.owner.toLowerCase() !== WALLET.toLowerCase()) {
       say(zh ? `已连接的钱包 ${short(WALLET)} 不是这张工资条上的钱包。请在钱包里切换到 ${short(j.owner)}。` : `The connected wallet ${short(WALLET)} is not the one on this payslip. Switch to ${short(j.owner)} in your wallet.`, 'down');
       return;
@@ -64,19 +90,28 @@ function tradeFlow(box, job) {
     button(j.action, run);
     const ready = plan && planFor === keyOf(j) ? plan : null;
     if (ready && !ready.wallet.enough) say(zh ? `钱包 ${short(WALLET)} 只有 ${j.spend.text(ready.wallet.balance)}。` : `Wallet ${short(WALLET)} holds only ${j.spend.text(ready.wallet.balance)}.`, 'down');
-    else say(t('Wallet ', '钱包 ') + short(WALLET) + (ready ? ' · ' + (ready.wallet.needsApproval ? t('you will confirm twice: once to allow the token, once to swap', '需要在钱包里确认两次：先授权，再兑换') : t('you will confirm once in your wallet', '只需在钱包里确认一次')) : ''));
+    else say(t('Wallet ', '钱包 ') + short(WALLET) + (WC && PROVIDER === WC ? ' · WalletConnect' : '') + (ready ? ' · ' + (ready.wallet.needsApproval ? t('you will confirm twice: once to allow the token, once to swap', '需要在钱包里确认两次：先授权，再兑换') : t('you will confirm once in your wallet', '只需在钱包里确认一次')) : ''));
+    if (WC && PROVIDER === WC) button(t('Disconnect', '断开连接'), () => { remember(false); WC.disconnect().catch(() => {}); PROVIDER = window.ethereum || null; onAccounts([]); }, true);
     // Get the trade ready before the click, so the click goes straight to the wallet.
     if (!ready) prepare(j).then(() => { if (!stage) render(); }, () => {});
+  }
+
+  // No wallet connected yet. A browser with a wallet in it gets one button. A phone's own browser
+  // has none, so it gets links that reopen this page inside a wallet app, where that button shows.
+  // WalletConnect, when it is set up, covers every other wallet from either kind of browser.
+  function howToConnect(j) {
+    const viaWC = () => button(window.ethereum ? t('Another wallet · WalletConnect', '其他钱包 · WalletConnect') : 'WalletConnect', () => connect(true), true);
+    if (window.ethereum) { button(t('Connect wallet', '连接钱包'), connect); if (WALLETCONNECT_ID) viaWC(); return; }
+    if (PHONE) return noWallet(j);
+    if (!WALLETCONNECT_ID) return say(t('To trade, open this page in a browser with a BNB Chain wallet such as Binance Wallet or MetaMask.', '要交易，请在装有 BNB Chain 钱包（如币安钱包或 MetaMask）的浏览器中打开本页。'));
+    say(t('This browser has no wallet in it. Connect the wallet on your phone by scanning a code:', '这个浏览器里没有钱包。用手机钱包扫码连接：'));
+    viaWC();
   }
 
   // A phone's own browser has no wallet in it. These links reopen this page inside a wallet app's
   // browser, where the Connect button shows. Each follows that wallet's own documented link; the
   // Binance one is built the way @binance/w3w-utils builds it. Any other wallet: copy the link.
   function noWallet(j) {
-    if (!/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-      say(t('To trade, open this page in a browser with a BNB Chain wallet such as Binance Wallet or MetaMask.', '要交易，请在装有 BNB Chain 钱包（如币安钱包或 MetaMask）的浏览器中打开本页。'));
-      return;
-    }
     const url = j.link || location.href;
     const binance = 'bnc://app.binance.com/mp/app?appId=yFK5FCqYprrXDiVFbhyRx7&startPagePath=' + btoa('/pages/browser/index') + '&startPageQuery=' + btoa('url=' + url + '&defaultChainId=56');
     const apps = [
@@ -88,9 +123,21 @@ function tradeFlow(box, job) {
       ['TokenPocket', 'tpdapp://open?params=' + encodeURIComponent(JSON.stringify({ url, chain: 'BSC', source: 'Stockyard' }))],
       ['Coinbase Wallet', 'https://go.cb-w.com/dapp?cb_url=' + encodeURIComponent(url)],
     ];
-    say(t('To trade on your phone, open this page inside your wallet app:', '在手机上交易，请在钱包 App 里打开本页：'));
     const row = el('div', 'wallets');
-    apps.forEach(([name, href], i) => { const a = el('a', 'btn' + (i ? ' plain' : ''), name); a.href = href; a.rel = 'noopener'; row.append(a); });
+    const link = ([name, href], i) => { const a = el('a', 'btn' + (i ? ' plain' : ''), name); a.href = href; a.rel = 'noopener'; row.append(a); };
+    // With WalletConnect set up, three wallets open the page in their own browser and every
+    // other wallet connects from here.
+    if (WALLETCONNECT_ID) {
+      say(t('To trade on your phone, open this page inside your wallet app, or connect any other wallet:', '在手机上交易，请在钱包 App 里打开本页，或连接其他任何钱包：'));
+      apps.slice(0, 3).forEach(link);
+      const wc = el('button', 'btn plain', 'WalletConnect');
+      wc.type = 'button'; wc.onclick = () => connect(true);
+      row.append(wc);
+      box.append(row);
+      return;
+    }
+    say(t('To trade on your phone, open this page inside your wallet app:', '在手机上交易，请在钱包 App 里打开本页：'));
+    apps.forEach(link);
     const other = el('button', 'btn plain', t('Other · copy link', '其他 · 复制链接'));
     other.type = 'button';
     // If the browser will not copy, the link is shown instead, selected and ready to copy by hand.
@@ -105,27 +152,43 @@ function tradeFlow(box, job) {
     say(t('It opens there with this trade filled in and a Connect wallet button. With any other wallet, copy the link and paste it into the wallet\'s own browser.', '打开后这笔交易已填好，并会出现「连接钱包」按钮。其他钱包：复制链接，粘贴到钱包自带的浏览器里。'));
   }
 
-  async function connect() {
+  // viaWalletConnect is true only from the WalletConnect button; a plain click passes its event.
+  async function connect(viaWalletConnect) {
     try {
-      const [account] = await ethereum.request({ method: 'eth_requestAccounts' });
-      if (await ethereum.request({ method: 'eth_chainId' }) !== '0x38')
-        await ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x38' }] });
+      let account;
+      if (viaWalletConnect === true) {
+        note = { text: t('Opening WalletConnect…', '正在打开 WalletConnect…') }; render();
+        const wc = await walletConnect();
+        if (!wc.session) await wc.connect();
+        PROVIDER = wc; account = wc.accounts[0]; remember(true);
+      } else {
+        PROVIDER = window.ethereum;
+        [account] = await PROVIDER.request({ method: 'eth_requestAccounts' });
+      }
+      if (parseInt(await PROVIDER.request({ method: 'eth_chainId' })) !== 56)
+        await PROVIDER.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x38' }] });
       WALLET = account; note = null;
       for (const f of FLOWS) f.render();
-    } catch (e) { note = { text: t('Could not connect: ', '连接失败：') + (e.message || e), bad: true }; render(); }
+    } catch (e) {
+      // Closing the WalletConnect window is not an error worth showing.
+      const closed = viaWalletConnect === true && /reset|closed|expired/i.test(e?.message || '');
+      note = closed ? null : { text: t('Could not connect: ', '连接失败：') + (e?.message || e), bad: true };
+      render();
+    }
   }
 
+  const openApp = () => (WC && PROVIDER === WC && PHONE ? t(' Open your wallet app if it does not come up by itself.', ' 如果钱包 App 没有自动打开，请手动打开它。') : '');
   const fail = (text) => { stage = null; plan = null; note = { text, bad: true }; render(); };
   const rejected = (e) => e?.code === 4001 || /reject|denied|cancel/i.test(e?.message || '');
 
   // Send one transaction and wait for it. Returns its receipt, or null if it never showed up.
   async function send(tx) {
-    const hash = await ethereum.request({ method: 'eth_sendTransaction', params: [{ from: WALLET, to: tx.to, data: tx.data, value: '0x' + BigInt(tx.value || '0').toString(16), gas: '0x' + Math.ceil(Number(tx.gas || 450000) * 1.3).toString(16) }] });
+    const hash = await PROVIDER.request({ method: 'eth_sendTransaction', params: [{ from: WALLET, to: tx.to, data: tx.data, value: '0x' + BigInt(tx.value || '0').toString(16), gas: '0x' + Math.ceil(Number(tx.gas || 450000) * 1.3).toString(16) }] });
     stage = { ...stage, text: t('Sent. Waiting for BNB Chain…', '已发送，等待 BNB Chain 确认…') }; render();
     for (let i = 0; i < 90; i++) {
       await new Promise((r) => setTimeout(r, 1000));
       let receipt = null;
-      try { receipt = await ethereum.request({ method: 'eth_getTransactionReceipt', params: [hash] }); } catch {}
+      try { receipt = await PROVIDER.request({ method: 'eth_getTransactionReceipt', params: [hash] }); } catch {}
       if (receipt) return { hash, receipt };
     }
     return { hash, receipt: null };
@@ -143,7 +206,7 @@ function tradeFlow(box, job) {
       const two = p.wallet.needsApproval;
       if (two) {
         if (p.dryRun && !p.dryRun.ok) return fail(t('This trade would fail right now, so nothing was sent. ', '这笔交易现在会失败，所以没有发送任何东西。') + (p.dryRun.reason || ''));
-        stage = { step: 0, two, text: zh ? `请在钱包里确认：允许动用 ${j.spend.text(units(j.amount, j.spend.decimals))}。` : `Confirm in your wallet: allow ${j.spend.text(units(j.amount, j.spend.decimals))} to be swapped.` }; render();
+        stage = { step: 0, two, text: (zh ? `请在钱包里确认：允许动用 ${j.spend.text(units(j.amount, j.spend.decimals))}。` : `Confirm in your wallet: allow ${j.spend.text(units(j.amount, j.spend.decimals))} to be swapped.`) + openApp() }; render();
         const a = await send(p.approveTx);
         if (!a.receipt) return fail(zh ? `还没等到确认。交易 ${short(a.hash)}，稍后再试。` : `Still waiting on transaction ${short(a.hash)}. Try again in a moment.`);
         if (a.receipt.status !== '0x1') return fail(t('The allowance did not go through. Nothing was swapped.', '授权没有成功，没有进行兑换。'));
@@ -159,7 +222,7 @@ function tradeFlow(box, job) {
       }
       if (p.wallet.needsApproval) return fail(t('The allowance has not reached the network yet. Try again in a moment.', '授权还没有生效，请稍后再试。'));
       if (!p.dryRun?.ok) return fail(t('This trade would fail right now, so nothing was sent. ', '这笔交易现在会失败，所以没有发送任何东西。') + (p.dryRun?.reason || ''));
-      stage = { step: two ? 1 : 0, two, text: t('Confirm the swap in your wallet.', '请在钱包里确认兑换。') }; render();
+      stage = { step: two ? 1 : 0, two, text: t('Confirm the swap in your wallet.', '请在钱包里确认兑换。') + openApp() }; render();
       const s = await send(p.swapTx);
       if (!s.receipt) return fail(zh ? `还没等到确认。交易 ${short(s.hash)}，可在 BscScan 查看。` : `Still waiting on transaction ${short(s.hash)}. Check it on BscScan.`);
       if (s.receipt.status !== '0x1') return fail(zh ? `兑换在链上失败了，你的币没有动。交易 ${short(s.hash)}。` : `The swap failed on-chain and your tokens did not move. Transaction ${short(s.hash)}.`);
