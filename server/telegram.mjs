@@ -478,11 +478,20 @@ export async function startTelegram() {
   // Telegram lets one copy of a bot listen at a time: TELEGRAM_BOT=off keeps a second machine quiet.
   if (!token || process.env.TELEGRAM_BOT === 'off') return;
   if (existsSync(STATE)) { try { state = { offset: 0, chats: {}, ...JSON.parse(readFileSync(STATE, 'utf8')) }; } catch {} }
-  try {
-    const me = await tg('getMe');
-    console.log('Telegram bot @' + me.username + ' is listening');
-    status.telegram = '@' + me.username;
-  } catch (err) { console.log('Telegram bot did not start:', err.message); return; }
+  // Telegram may not answer at the very moment the server starts: keep trying, a little slower
+  // each time. Only a refused token ends it.
+  for (let wait = 3000; ; wait = Math.min(wait * 2, 60000)) {
+    try {
+      const me = await tg('getMe');
+      console.log('Telegram bot @' + me.username + ' is listening');
+      status.telegram = '@' + me.username;
+      break;
+    } catch (err) {
+      if (err.code === 401 || err.code === 404) { console.log('Telegram bot did not start: the token was refused'); return; }
+      console.log(`Telegram bot could not reach Telegram (${err.message}); trying again in ${wait / 1000} s`);
+      await sleep(wait);
+    }
+  }
 
   // The command menu and profile texts are set in the background, so a slow or failed call there
   // never keeps the bot from answering.
