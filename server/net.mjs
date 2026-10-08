@@ -8,6 +8,13 @@
 // 2. fetch closes a connection after four idle seconds, so the next request pays for a new one.
 //    Keeping connections for a minute means a busy server pays that cost once, not every time.
 import tls from 'node:tls';
+import net from 'node:net';
+
+// 3. When a name has several addresses, Node gives each one a quarter of a second to connect
+//    before moving to the next. A far server often needs longer, and where the next address is
+//    IPv6 on a machine without IPv6 the whole connection then fails ("fetch failed", ETIMEDOUT).
+//    Telegram is such a name. Five seconds per address ends that.
+net.setDefaultAutoSelectFamilyAttemptTimeout?.(5000);
 
 const groups = process.env.STOCKYARD_TLS_GROUPS || 'X25519:P-256:P-384';
 if (groups !== 'auto') tls.DEFAULT_ECDH_CURVE = groups;
