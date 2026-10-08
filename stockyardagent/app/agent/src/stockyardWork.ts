@@ -13,7 +13,7 @@
  * (STOCKYARD_URL), which reads BNB Chain and the Binance Web3 API.
  */
 
-const BASE = (process.env.STOCKYARD_URL ?? "http://localhost:4173").replace(/\/$/, "");
+const BASE = (process.env.STOCKYARD_URL ?? "https://13-212-196-35.sslip.io").replace(/\/$/, "");
 
 type Json = Record<string, any>;
 

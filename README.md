@@ -4,6 +4,9 @@ The home for stock memes on BNB Chain: meme coins whose liquidity pool is quoted
 stock instead of BNB. Built by a member of the 牛马 NIUMA community for
 [BNB Hack: Tokenized Stocks Edition](https://www.bnbchain.org/en/hackathons/tokenized-stocks).
 
+**Live: https://13-212-196-35.sslip.io** · Telegram bot [@Stockyard_PayslipBot](https://t.me/Stockyard_PayslipBot) ·
+paid data for agents at [`/x402`](https://13-212-196-35.sslip.io/x402)
+
 An on-chain scan on 6 October 2026 found 202,703 PancakeSwap v2 pools that pair a coin with a
 tokenized stock. 3,549 of them held stock that day, $15.8M in total, and 55 of those coins were
 worth $100K or more. Some pay their holders in stock. Until now there was no tool built for them.
@@ -48,7 +51,11 @@ Work in progress during the hackathon build window.
   own wallet, using the Studio runtime's x402 client. Binance's B402 settled it and paid the gas, in
   [this transaction](https://bscscan.com/tx/0x1c6c4e13c8d063e00bb101e632f9bdd3b8a23ce71f055ae3971ad0c2bfa1f92f). The agent had funded itself first by swapping BNB into U through
   Binance's aggregator.
-- Next: host the site and the agent, and switch on the agent's paid jobs.
+- Hosted since 8 Oct 2026 on one small AWS server in Singapore, set up by `deploy/setup.sh`: the
+  site, the API, the paid routes and the Telegram bot in one Node process, with Caddy in front for
+  HTTPS. From there a Binance quote comes back in about 0.4 s and a full trade plan (quote,
+  balance, approval, swap and the Transaction API check) in about 1.4 s.
+- Next: host the agent and switch on its paid jobs.
 
 Binance Web3 API modules in use: RWA Data, Market, Trading, Transaction, Wallet, B402 Payments.
 
@@ -84,7 +91,8 @@ node scripts/x402-buy.mjs "http://localhost:4173/x402/league?stock=SPY"
 ```
 
 The first command makes a throwaway buyer wallet and prints its address; send it a few cents of U
-or USD1. The second pays one cent and prints the answer and the settlement transaction.
+or USD1. The second pays one cent and prints the answer and the settlement transaction. The same
+works against the live site: `https://13-212-196-35.sslip.io/x402/league?stock=SPY`.
 
 To turn on the Telegram bot, create a bot with [@BotFather](https://t.me/BotFather), put its token
 in `.env` as `TELEGRAM_BOT_TOKEN` and restart the server. It uses long polling, so it works without
@@ -98,6 +106,16 @@ Binance checks the caller's location, so run these from a region its
 The server is one Node process with no build step, so any Node host works. `railway.json` sets it
 up for Railway: start command, and `/api/health` as the health check.
 
+On a plain Ubuntu server (ours is a 2 GB one on AWS), `deploy/setup.sh` does everything: Node 22,
+the app as a service that restarts by itself, and Caddy for HTTPS. With no domain it uses the
+server's address under sslip.io, which is how the live link above is named.
+
+```bash
+scp .env ubuntu@<server>:stockyard.env      # your keys, never in the repo
+scp deploy/setup.sh ubuntu@<server>:setup.sh
+ssh ubuntu@<server> bash setup.sh           # run it again later to update
+```
+
 - **Region matters.** Binance turns away calls from some countries, the United States and the
   Netherlands among them, so pick a region outside its
   [restricted list](https://web3.binance.com/en/dev-docs/web3-api-prohibited-regions). Singapore
@@ -105,7 +123,8 @@ up for Railway: start command, and `/api/health` as the health check.
 - **Settings to give the host:** `BINANCE_W3_API_KEY`, `BINANCE_W3_API_SECRET`, and optionally
   `B402_PAY_TO`, `TELEGRAM_BOT_TOKEN` and `PUBLIC_URL` (the site's own address, used in the links
   the bot and the paid routes hand out). The host supplies `PORT`.
-- **One bot per token.** The Telegram bot polls, so run it in one place only.
+- **One bot per token.** The Telegram bot polls, so run it in one place only. `TELEGRAM_BOT=off`
+  in `.env` keeps a second copy, such as the one on your own machine, quiet.
 - A new server shows the league from `data/league-seed.json` at once, labelled with when it was
   read, then replaces it with a fresh one built from `data/pools.bin` and `data/live.json`. The payment
   ledger and the bot's watch list are files under `data/`; give the host a volume there if they

@@ -435,7 +435,8 @@ export async function startTelegram() {
   token = process.env.TELEGRAM_BOT_TOKEN;
   site = (process.env.PUBLIC_URL || '').replace(/\/$/, '');
   base = (process.env.TELEGRAM_API || 'https://api.telegram.org').replace(/\/$/, '');
-  if (!token) return;
+  // Telegram lets one copy of a bot listen at a time: TELEGRAM_BOT=off keeps a second machine quiet.
+  if (!token || process.env.TELEGRAM_BOT === 'off') return;
   if (existsSync(STATE)) { try { state = { offset: 0, chats: {}, ...JSON.parse(readFileSync(STATE, 'utf8')) }; } catch {} }
   try {
     const me = await tg('getMe');

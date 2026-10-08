@@ -12,7 +12,8 @@ given one job: write reports on stock memes from Stockyard's live data.
 | Free to try | The MCP tool `stock_meme_report`. |
 | Paid | ERC-8183 jobs at $0.10 once the rail is switched on (`payments.erc8183.enabled`). It is off until the agent has durable storage for deliverables. |
 
-The agent reads its numbers from a Stockyard server (`STOCKYARD_URL`, default `http://localhost:4173`).
+The agent reads its numbers from a Stockyard server: the live one at
+https://13-212-196-35.sslip.io unless `STOCKYARD_URL` names another.
 
 ## Run it
 

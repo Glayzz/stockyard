@@ -1,13 +1,15 @@
 #!/usr/bin/env node
 // Stockyard as an MCP server: five read-only tools any agent can call over stdio.
-// It talks to a running Stockyard server, so it needs no keys of its own.
+// It talks to a running Stockyard server, so it needs no keys of its own: the live one unless
+// STOCKYARD_URL names another.
 //
-//   STOCKYARD_URL=https://your-stockyard-host node mcp/server.mjs
+//   node mcp/server.mjs
+//   STOCKYARD_URL=http://localhost:4173 node mcp/server.mjs
 //
 // Speaks JSON-RPC 2.0, one message per line, with no dependencies.
 import { createInterface } from 'node:readline';
 
-const BASE = (process.env.STOCKYARD_URL || 'http://localhost:4173').replace(/\/$/, '');
+const BASE = (process.env.STOCKYARD_URL || 'https://13-212-196-35.sslip.io').replace(/\/$/, '');
 const ADDRESS = { type: 'string', pattern: '^0x[0-9a-fA-F]{40}$' };
 const USDT = '0x55d398326f99059ff775485246999027b3197955';
 const quote = (from, to, amount) => api(`/api/quote?from=${from}&to=${to}&amount=${amount}`).catch((e) => ({ error: e.message }));

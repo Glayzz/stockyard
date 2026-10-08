@@ -20,20 +20,22 @@ if [ -z "${STOCKYARD_HOST:-}" ]; then
 fi
 echo "== Setting up https://$STOCKYARD_HOST"
 
-export DEBIAN_FRONTEND=noninteractive
-sudo apt-get update -qq
-sudo apt-get install -y -qq curl git ca-certificates gnupg debian-keyring debian-archive-keyring apt-transport-https
+LOG=$HOME/stockyard-setup.log
+: > "$LOG"
+apt_quiet() { sudo env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get -y -qq "$@" >>"$LOG" 2>&1 || { tail -20 "$LOG"; exit 1; }; }
+apt_quiet update
+apt_quiet install curl git ca-certificates gnupg debian-keyring debian-archive-keyring apt-transport-https
 
 if ! command -v node >/dev/null || [ "$(node -p 'process.versions.node.split(".")[0]')" -lt 22 ]; then
-  curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - >/dev/null
-  sudo apt-get install -y -qq nodejs
+  curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - >>"$LOG" 2>&1
+  apt_quiet install nodejs
 fi
 
 if ! command -v caddy >/dev/null; then
   curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/gpg.key | sudo gpg --dearmor --yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
   curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt | sudo tee /etc/apt/sources.list.d/caddy-stable.list >/dev/null
-  sudo apt-get update -qq
-  sudo apt-get install -y -qq caddy
+  apt_quiet update
+  apt_quiet install caddy
 fi
 
 sudo mkdir -p "$DIR"

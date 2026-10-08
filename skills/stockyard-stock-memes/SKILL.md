@@ -80,10 +80,11 @@ first leaves the user holding the stock. That is the "keep the stock" route: one
 
 ## Setup
 
-Set `STOCKYARD_URL` to a running Stockyard server. No API key is needed for these endpoints.
+Set `STOCKYARD_URL` to a running Stockyard server: the live one below, or your own
+(`http://localhost:4173` after `node server/dev.mjs`). No API key is needed for these endpoints.
 
 ```bash
-export STOCKYARD_URL=http://localhost:4173
+export STOCKYARD_URL=https://13-212-196-35.sslip.io
 ```
 
 The same functions are available as five MCP tools: `node mcp/server.mjs`.
