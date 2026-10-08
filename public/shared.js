@@ -3,7 +3,7 @@ const NIUMA = '0xc01a2e136f92772eecab15eb054e8f6fa06b7777';
 // The Stockyard agent's ERC-8004 identity on BNB Chain, and the transaction that registered it.
 // WalletConnect's project ID for this site, from dashboard.reown.com. It is public by design.
 // While it is empty the WalletConnect button stays hidden and phones get the longer wallet list.
-const WALLETCONNECT_ID = '';
+const WALLETCONNECT_ID = '1493458eeadd79fa493f739dd46edb22';
 const AGENT = { id: 365431, wallet: '0x1E8316cE99376E8E1F5E6b6482243e4d47DADdc3', registered: '0x1d978538d858f22bf1c51e3b678f11eb3eac0e2e50bc2642358f3182f6a4c65a' };
 // Mainnet transactions made through this project, linked from the Agents page.
 const PROOF = {

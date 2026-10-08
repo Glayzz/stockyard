@@ -125,28 +125,31 @@ function tradeFlow(box, job) {
     ];
     const row = el('div', 'wallets');
     const link = ([name, href], i) => { const a = el('a', 'btn' + (i ? ' plain' : ''), name); a.href = href; a.rel = 'noopener'; row.append(a); };
-    // With WalletConnect set up, three wallets open the page in their own browser and every
-    // other wallet connects from here.
+    // Copying the link works with every wallet that has a browser, on any network. If the
+    // browser will not copy, the link is shown instead, selected and ready to copy by hand.
+    const label = WALLETCONNECT_ID ? t('Copy this trade\'s link', '复制这笔交易的链接') : t('Other · copy link', '其他 · 复制链接');
+    const other = el('button', WALLETCONNECT_ID ? 'copy' : 'btn plain', label);
+    other.type = 'button';
+    const shown = el('input', 'linkfield');
+    shown.readOnly = true; shown.value = url; shown.hidden = true;
+    other.onclick = async () => {
+      if (await copyText(url)) { other.textContent = t('Copied', '已复制'); setTimeout(() => { other.textContent = label; }, 1500); }
+      else { shown.hidden = false; shown.focus(); shown.select(); }
+    };
+    // With WalletConnect set up, five wallets open the page in their own browser and every other
+    // wallet connects from here. The direct links stay because some phone networks block
+    // WalletConnect's server.
     if (WALLETCONNECT_ID) {
-      say(t('To trade on your phone, open this page inside your wallet app, or connect any other wallet:', '在手机上交易，请在钱包 App 里打开本页，或连接其他任何钱包：'));
-      apps.slice(0, 3).forEach(link);
+      say(t('To trade on your phone, open this page inside your wallet app, or connect any other wallet with WalletConnect:', '在手机上交易，请在钱包 App 里打开本页，或用 WalletConnect 连接其他任何钱包：'));
+      apps.slice(0, 5).forEach(link);
       const wc = el('button', 'btn plain', 'WalletConnect');
       wc.type = 'button'; wc.onclick = () => connect(true);
       row.append(wc);
-      box.append(row);
+      box.append(row, other, shown);
       return;
     }
     say(t('To trade on your phone, open this page inside your wallet app:', '在手机上交易，请在钱包 App 里打开本页：'));
     apps.forEach(link);
-    const other = el('button', 'btn plain', t('Other · copy link', '其他 · 复制链接'));
-    other.type = 'button';
-    // If the browser will not copy, the link is shown instead, selected and ready to copy by hand.
-    const shown = el('input', 'linkfield');
-    shown.readOnly = true; shown.value = url; shown.hidden = true;
-    other.onclick = async () => {
-      if (await copyText(url)) { other.textContent = t('Copied', '已复制'); setTimeout(() => { other.textContent = t('Other · copy link', '其他 · 复制链接'); }, 1500); }
-      else { shown.hidden = false; shown.focus(); shown.select(); }
-    };
     row.append(other);
     box.append(row, shown);
     say(t('It opens there with this trade filled in and a Connect wallet button. With any other wallet, copy the link and paste it into the wallet\'s own browser.', '打开后这笔交易已填好，并会出现「连接钱包」按钮。其他钱包：复制链接，粘贴到钱包自带的浏览器里。'));
@@ -158,6 +161,15 @@ function tradeFlow(box, job) {
       let account;
       if (viaWalletConnect === true) {
         note = { text: t('Opening WalletConnect…', '正在打开 WalletConnect…') }; render();
+        // Some networks block WalletConnect's server. Find that out now, before a window opens
+        // that would only spin.
+        const reachable = await fetch('https://relay.walletconnect.org/hello', { mode: 'no-cors', cache: 'no-store', signal: AbortSignal.timeout(8000) }).then(() => true, () => false);
+        if (!reachable) {
+          note = { bad: true, text: PHONE
+            ? t('This network blocks WalletConnect. Use one of the wallet buttons below instead, or switch network or turn on a VPN and try again.', '当前网络屏蔽了 WalletConnect。请改用下面的钱包按钮，或更换网络、打开 VPN 后重试。')
+            : t('This network blocks WalletConnect. Switch network or turn on a VPN and try again, or use a browser with a wallet extension.', '当前网络屏蔽了 WalletConnect。请更换网络或打开 VPN 后重试，或使用装有钱包扩展的浏览器。') };
+          return render();
+        }
         const wc = await walletConnect();
         if (!wc.session) await wc.connect();
         PROVIDER = wc; account = wc.accounts[0]; remember(true);
