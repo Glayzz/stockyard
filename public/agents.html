@@ -52,7 +52,7 @@
       <h2 class="sec" data-zh="用币安 Agentic Wallet 交易">Trade with Binance Agentic Wallet</h2>
       <div class="card">
         <p class="story" data-zh="一份币安 Skills Hub 格式的技能：先查找和解读股票 Meme，再把成交交给币安 Agentic Wallet。技能本身从不签名。">A skill in the Binance Skills Hub format: find and explain a stock meme, then hand the trade to Binance Agentic Wallet. The skill itself never signs.</p>
-        <p class="note"><a class="link" href="https://github.com/Glayzz/stockyard/blob/main/skills/stockyard-stock-memes/SKILL.md" target="_blank" rel="noopener" data-zh="阅读 SKILL.md ↗">Read SKILL.md ↗</a></p>
+        <p class="note"><a class="link" href="https://github.com/Glayzz/stockyard/blob/main/skills/stockyard-stock-memes/SKILL.md" target="_blank" rel="noopener" data-zh="阅读 SKILL.md ↗">Read SKILL.md ↗</a> · <a class="link" href="https://github.com/Glayzz/stockyard/blob/main/scripts/agentic-trade.mjs" target="_blank" rel="noopener" data-zh="交易脚本 ↗">The trade script ↗</a></p>
       </div>
     </div>
   </div>
@@ -86,7 +86,8 @@ async function render() {
     tile(t('On-chain identity', '链上身份'), t('Agent ' + AGENT.id, '智能体 ' + AGENT.id), t('registered on BNB Chain under ERC-8004', '在 BNB Chain 上按 ERC-8004 注册'), tx(AGENT.registered)),
     tile(t('A paid call, settled', '一次付费调用，已结算'), '0.01 U', t('the agent paid for data; Binance B402 settled it and paid the gas', '智能体为数据付费，币安 B402 结算并代付 gas'), tx(paid?.earned?.last?.transaction || PROOF.paid)),
     tile(t('An agent funding itself', '智能体自己筹资'), 'BNB → U', t('swapped through Binance\'s aggregator from its own wallet', '用自己的钱包通过币安聚合器兑换'), tx(PROOF.topUp)),
-    tile(t('A live stock trade', '一笔真实的股票交易'), 'NIUMA → S&P 500', t('sold through the coin page, kept as tokenized stock', '在币页面卖出，留下代币化股票'), tx(PROOF.trade)));
+    tile(t('A live stock trade', '一笔真实的股票交易'), 'NIUMA → S&P 500', t('sold through the coin page, kept as tokenized stock', '在币页面卖出，留下代币化股票'), tx(PROOF.trade)),
+    tile(t('A trade by Agentic Wallet', 'Agentic Wallet 完成的交易'), 'NIUMA → S&P 500', t('Stockyard named and checked the trade; Binance Agentic Wallet executed it', 'Stockyard 给出并检查这笔交易，由币安 Agentic Wallet 执行'), tx(PROOF.agentic)));
 
   if (paid) {
     $('prices').replaceChildren(...paid.resources.map((r) => {

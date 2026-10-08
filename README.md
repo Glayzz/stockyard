@@ -57,6 +57,13 @@ Built during the hackathon build window, 16 September to 11 October 2026, and li
   own signer settled it and paid the gas, in
   [this transaction](https://bscscan.com/tx/0xee59cb7866e5a705dc58c4682399441a86a0b47970784c6dfcc854410ad8ee85):
   0.01 U from the agent's wallet to the project's receiving address.
+- Traded by Binance Agentic Wallet: on 8 Oct 2026 `scripts/agentic-trade.mjs` had an Agentic Wallet,
+  signed in through Binance's `baw` CLI, buy 768 NIUMA with 0.001 BNB
+  ([transaction](https://bscscan.com/tx/0x3b59ff7f2343fba9ca0e0961c29af995684af7e6227b4423867bf4023f56ee49)) and then sell all of it and keep the stock, 0.000934
+  SPYB ([transaction](https://bscscan.com/tx/0xf50fecf7de599312845956dcfefa1a2fe82dde14a9ff0c0e8146609b4de71b31)). For each trade Stockyard named it and checked
+  it first (aggregator quote, balance, Transaction API) and the wallet quoted it again before
+  executing. The wallet's BNB came from the Stockyard agent's own wallet
+  ([transaction](https://bscscan.com/tx/0x963f25939aad9fe73a6a702c083959dbf6c05fd2ff049e82986fec0df1984b95)).
 - Hosted since 8 Oct 2026 on one small AWS server in Singapore, set up by `deploy/setup.sh`: the
   site, the API, the paid routes and the Telegram bot in one Node process, with Caddy in front for
   HTTPS. From there a Binance quote comes back in about 0.4 s and a full trade plan (quote,
@@ -67,6 +74,7 @@ Built during the hackathon build window, 16 September to 11 October 2026, and li
 - Next: host the agent and switch on its paid jobs.
 
 Binance Web3 API modules in use: RWA Data, Market, Trading, Transaction, Wallet, B402 Payments.
+Also used: Binance Agentic Wallet (the `baw` CLI) and BNB Agent Studio.
 
 ## Run it
 

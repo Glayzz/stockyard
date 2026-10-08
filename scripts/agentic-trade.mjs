@@ -108,12 +108,16 @@ if (plan.wallet && !plan.wallet.enough) stop('\nNot sent: the wallet does not ho
 const order = baw('market-order', 'swap', ...swapArgs);
 if (!order.success || !order.data?.orderId) stop('\nAgentic Wallet did not take the order: ' + said(order));
 console.log(`\nOrder ${order.data.orderId} submitted. Waiting for it to finish…`);
-// An order id is not a finished trade: wait for the wallet to say how it ended.
+// An order id is not a finished trade: wait for the wallet to say how it ended. When the token
+// first has to be approved, the order is later listed under a different id than the one swap
+// returned, so if the id finds nothing the newest order for this pair since the submit is read.
+const submitted = Date.now() - 5000;
 for (let i = 0; i < 40; i++) {
   await new Promise((r) => setTimeout(r, 3000));
-  const o = baw('market-order', 'list', '--orderId', order.data.orderId).data?.list?.[0];
+  let o = baw('market-order', 'list', '--orderId', order.data.orderId).data?.list?.[0];
+  if (!o) o = (baw('market-order', 'list', '--fromToken', from.address, '--toToken', to.address, '--binanceChainId', '56', '--pageSize', '5').data?.list || []).find((x) => Date.parse(x.bookTime) >= submitted);
   if (!o || o.status === 'PENDING') continue;
-  if (o.status === 'FINISHED') finish(`Finished: ${o.fromTokenQty} ${o.fromTokenName} into ${o.toTokenName}.\nhttps://bscscan.com/tx/${o.txHash}`);
+  if (o.status === 'FINISHED') finish(`Finished: ${num(o.fromTokenQty)} ${o.fromTokenName} into ${o.toTokenActualQty ? num(o.toTokenActualQty) + ' ' : ''}${o.toTokenName}.\nhttps://bscscan.com/tx/${o.txHash}`);
   stop(`The order ended as ${o.status}` + (o.txHash ? `: https://bscscan.com/tx/${o.txHash}` : ' with no transaction.') + ' Nothing more was sent.');
 }
 console.log(`Still processing after two minutes. Check it with: baw market-order list --orderId ${order.data.orderId} --json`);

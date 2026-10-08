@@ -12,6 +12,8 @@ const PROOF = {
   // The paid call against the hosted site, 8 Oct 2026. The first one, a day earlier against a
   // local server, was 0x1c6c4e13…f92f.
   paid: '0xee59cb7866e5a705dc58c4682399441a86a0b47970784c6dfcc854410ad8ee85',
+  // Binance Agentic Wallet selling NIUMA and keeping the stock, 8 Oct 2026.
+  agentic: '0xf50fecf7de599312845956dcfefa1a2fe82dde14a9ff0c0e8146609b4de71b31',
 };
 // The default league only lists coins at or above these; the Show all switch lifts them.
 const MIN_MCAP = 100000, MIN_STOCK_USD = 1000;

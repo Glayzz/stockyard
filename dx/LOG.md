@@ -87,3 +87,13 @@
 - `wallet settings` showed the defaults: $50,000 daily limit, abnormal transactions auto-rejected, tradeAllTokens false, x402 limit $20 a day, developer mode off, signed in for 48 hours.
 - `market-order quote` answered for NIUMA into SPYB, SPYB into NIUMA, USDT into SPYB and BNB into SPYB before the wallet held anything, so a quote needs no balance. Its numbers were within half a percent of the Web3 API's aggregator/quote for the same trade (0.000611 against 0.000613 SPYB for 500 NIUMA).
 - On Windows `baw` is a .cmd file, so starting it from Node needs a shell; with every argument an address, a number or a fixed word that is safe, but passing JSON (x402-payment preview) that way would not be.
+
+## 8 Oct 2026 · first trades by Agentic Wallet
+
+- Funded the Agentic Wallet with 0.0016 BNB from the Stockyard agent's own wallet (https://bscscan.com/tx/0x963f25939aad9fe73a6a702c083959dbf6c05fd2ff049e82986fec0df1984b95), then ran two trades through `baw market-order swap` from my script.
+- Trade 1, BNB into NIUMA: 0.001 BNB gave 768.237 NIUMA, finished one second after it was booked: https://bscscan.com/tx/0x3b59ff7f2343fba9ca0e0961c29af995684af7e6227b4423867bf4023f56ee49. Network fee 0.0000619 BNB, paid by the wallet itself.
+- Trade 2, NIUMA into SPYB (sell the meme, keep the stock): 768.237 NIUMA gave 0.000934177 SPYB: https://bscscan.com/tx/0xf50fecf7de599312845956dcfefa1a2fe82dde14a9ff0c0e8146609b4de71b31. The wallet sent its own approval first (0x795c7344…af5c, to 0xb300000b72DEAEb607a12d5f54773D1C19c7028d); fees 0.0000033 and 0.0000444 BNB.
+- Pitfall: for trade 2, `market-order swap` returned orderId 26100800001951375543, but `market-order list --orderId 26100800001951375543` kept answering an empty list. The order had finished and is listed as 26100800001951375297. For trade 1, which needed no approval, the two ids matched. The skill docs say to poll by the returned id until FINISHED, which would wait forever here. My script now falls back to the newest order for the pair.
+- `tradeAllTokens` was false ("Limited Tokens" in the app) and NIUMA still traded, so either it is on the allowed list or the setting does not cover it. I could not find the list.
+- Quotes agreed closely before each trade: Stockyard's aggregator quote said 772.1 NIUMA and Agentic Wallet 768.3 (got 768.2); then 0.000946746 against 0.000943614 SPYB (got 0.000934177).
+- `wallet tx-history` returns the fee, the approval and the send/receive legs of each swap, which is everything a receipt needs.
