@@ -84,7 +84,7 @@ Set `STOCKYARD_URL` to a running Stockyard server: the live one below, or your o
 (`http://localhost:4173` after `node server/dev.mjs`). No API key is needed for these endpoints.
 
 ```bash
-export STOCKYARD_URL=https://13-212-196-35.sslip.io
+export STOCKYARD_URL=https://stockyardbnb.duckdns.org
 ```
 
 The same functions are available as five MCP tools: `node mcp/server.mjs`.

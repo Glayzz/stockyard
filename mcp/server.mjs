@@ -9,7 +9,7 @@
 // Speaks JSON-RPC 2.0, one message per line, with no dependencies.
 import { createInterface } from 'node:readline';
 
-const BASE = (process.env.STOCKYARD_URL || 'https://13-212-196-35.sslip.io').replace(/\/$/, '');
+const BASE = (process.env.STOCKYARD_URL || 'https://stockyardbnb.duckdns.org').replace(/\/$/, '');
 const ADDRESS = { type: 'string', pattern: '^0x[0-9a-fA-F]{40}$' };
 const USDT = '0x55d398326f99059ff775485246999027b3197955';
 const quote = (from, to, amount) => api(`/api/quote?from=${from}&to=${to}&amount=${amount}`).catch((e) => ({ error: e.message }));

@@ -4,8 +4,8 @@ The home for stock memes on BNB Chain: meme coins whose liquidity pool is quoted
 stock instead of BNB. Built by a member of the 牛马 NIUMA community for
 [BNB Hack: Tokenized Stocks Edition](https://www.bnbchain.org/en/hackathons/tokenized-stocks).
 
-**Live: https://13-212-196-35.sslip.io** · Telegram bot [@Stockyard_PayslipBot](https://t.me/Stockyard_PayslipBot) ·
-paid data for agents at [`/x402`](https://13-212-196-35.sslip.io/x402)
+**Live: https://stockyardbnb.duckdns.org** · Telegram bot [@Stockyard_PayslipBot](https://t.me/Stockyard_PayslipBot) ·
+paid data for agents at [`/x402`](https://stockyardbnb.duckdns.org/x402)
 
 An on-chain scan on 6 October 2026 found 202,703 PancakeSwap v2 pools that pair a coin with a
 tokenized stock. 3,549 of them held stock that day, $15.8M in total, and 55 of those coins were
@@ -55,6 +55,9 @@ Work in progress during the hackathon build window.
   site, the API, the paid routes and the Telegram bot in one Node process, with Caddy in front for
   HTTPS. From there a Binance quote comes back in about 0.4 s and a full trade plan (quote,
   balance, approval, swap and the Transaction API check) in about 1.4 s.
+- Trading from a phone: the trade box opens the same coin, side and amount inside Binance Wallet,
+  MetaMask, Trust Wallet, OKX or Bitget, or connects any other wallet through WalletConnect (a QR
+  code on a computer). If the network blocks WalletConnect's relay, the page says so first.
 - Next: host the agent and switch on its paid jobs.
 
 Binance Web3 API modules in use: RWA Data, Market, Trading, Transaction, Wallet, B402 Payments.
@@ -92,7 +95,7 @@ node scripts/x402-buy.mjs "http://localhost:4173/x402/league?stock=SPY"
 
 The first command makes a throwaway buyer wallet and prints its address; send it a few cents of U
 or USD1. The second pays one cent and prints the answer and the settlement transaction. The same
-works against the live site: `https://13-212-196-35.sslip.io/x402/league?stock=SPY`.
+works against the live site: `https://stockyardbnb.duckdns.org/x402/league?stock=SPY`.
 
 To turn on the Telegram bot, create a bot with [@BotFather](https://t.me/BotFather), put its token
 in `.env` as `TELEGRAM_BOT_TOKEN` and restart the server. It uses long polling, so it works without
@@ -108,13 +111,17 @@ up for Railway: start command, and `/api/health` as the health check.
 
 On a plain Ubuntu server (ours is a 2 GB one on AWS), `deploy/setup.sh` does everything: Node 22,
 the app as a service that restarts by itself, and Caddy for HTTPS. With no domain it uses the
-server's address under sslip.io, which is how the live link above is named.
+server's address under sslip.io. Run it once with `STOCKYARD_HOST=your.domain` to use a real name;
+the script remembers it and turns the address-based name into a redirect.
 
 ```bash
 scp .env ubuntu@<server>:stockyard.env      # your keys, never in the repo
 scp deploy/setup.sh ubuntu@<server>:setup.sh
 ssh ubuntu@<server> bash setup.sh           # run it again later to update
 ```
+
+A B402 seller needs a real name: Binance's firewall turns away payment checks whose resource
+address is under sslip.io or nip.io. Ours is a free DuckDNS name for that reason.
 
 - **Region matters.** Binance turns away calls from some countries, the United States and the
   Netherlands among them, so pick a region outside its

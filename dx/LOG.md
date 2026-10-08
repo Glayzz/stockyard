@@ -66,3 +66,9 @@
 - It would help if B402 said this in the docs, or answered with a JSON error. As it is, the seller sees an HTML page inside a JSON API, and the buyer sees a 502.
 - While probing I also hit HTTP 429 after about ten calls in a few seconds on the same key.
 - Fix on my side: give the site a real name. Also changed the server to tell the buyer "B402 could not check this payment, nothing was charged" and to keep the reason at `/x402/last`.
+
+## 8 Oct 2026 · the fix for the B402 block, and WalletConnect
+
+- Moved the site to a free DuckDNS name (stockyardbnb.duckdns.org). The same unsigned test payment that got the 403 page under sslip.io now gets the normal JSON answer from B402 `verify` ("invalid_exact_evm_payload_signature", which is right for a made-up signature).
+- Phone trading: a phone's own browser has no wallet, so the page links into wallet apps' browsers. Binance Wallet's link format is not in the Web3 API docs; I took it from the published @binance/w3w-utils package (`bnc://app.binance.com/mp/app?appId=…&startPagePath=…&startPageQuery=…`, wrapped as `https://app.binance.com/en/download?_dp=`).
+- My mobile carrier's DNS does not resolve relay.walletconnect.org (it also blocks binance.com), so WalletConnect cannot be tested from my own network without a VPN. The page now checks the relay first and says so.
