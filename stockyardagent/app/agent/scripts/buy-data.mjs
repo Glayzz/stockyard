@@ -12,6 +12,14 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import '../../../../server/net.mjs';
 
+// Anything unexpected ends in one plain line instead of a stack trace.
+process.on('uncaughtException', (err) => {
+  const code = err.cause?.code;
+  const why = code === 'EAI_AGAIN' || code === 'ENOTFOUND' ? `this connection could not look up ${err.cause.hostname || 'the site'}` : String(err.message || err);
+  console.log(`Stopped before finishing: ${why}. Check the lines above for anything already sent, then run it again.`);
+  process.exit(1);
+});
+
 const here = fileURLToPath(new URL('.', import.meta.url));
 process.chdir(here + '..');
 try { process.loadEnvFile(here + '../../../.studio/.env.local'); } catch {}

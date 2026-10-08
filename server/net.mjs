@@ -9,6 +9,7 @@
 //    Keeping connections for a minute means a busy server pays that cost once, not every time.
 import tls from 'node:tls';
 import net from 'node:net';
+import dns from 'node:dns';
 
 // 3. When a name has several addresses, Node gives each one a quarter of a second to connect
 //    before moving to the next. A far server often needs longer, and where the next address is
@@ -18,6 +19,24 @@ net.setDefaultAutoSelectFamilyAttemptTimeout?.(5000);
 
 const groups = process.env.STOCKYARD_TLS_GROUPS || 'X25519:P-256:P-384';
 if (groups !== 'auto') tls.DEFAULT_ECDH_CURVE = groups;
+
+// 4. On a slow or filtered resolver, looking a name up can fail one moment and work the next
+//    ("getaddrinfo EAI_AGAIN"). A lookup that fails is tried again up to three more times, and a
+//    name that resolved is remembered for five minutes, so one bad moment does not end a request.
+const known = new Map();
+function lookup(hostname, options, callback) {
+  if (typeof options === 'function') { callback = options; options = {}; }
+  const key = `${hostname}|${options.family || 0}|${options.all ? 'all' : 'one'}`;
+  const hit = known.get(key);
+  if (hit && Date.now() - hit.at < 300000) return process.nextTick(() => callback(null, ...hit.found));
+  let tries = 0;
+  const ask = () => dns.lookup(hostname, options, (err, ...found) => {
+    if (err && ++tries < 4 && (err.code === 'EAI_AGAIN' || err.code === 'ENOTFOUND')) return setTimeout(ask, 700 * tries);
+    if (!err) known.set(key, { at: Date.now(), found });
+    callback(err, ...found);
+  });
+  ask();
+}
 
 // A second pool for the Telegram bot's replies. It keeps a connection open for twenty seconds, so a
 // run of taps does not pay for a new connection each time, and closes it before Telegram would.
@@ -32,7 +51,7 @@ try {
   await fetch('data:,'); // the pool only exists once fetch has been used
   const Pool = globalThis[slot]?.constructor;
   if (Pool) {
-    globalThis[slot] = new Pool({ keepAliveTimeout: 60000, keepAliveMaxTimeout: 300000 });
-    replies = new Pool({ keepAliveTimeout: 20000, keepAliveMaxTimeout: 30000 });
+    globalThis[slot] = new Pool({ keepAliveTimeout: 60000, keepAliveMaxTimeout: 300000, connect: { lookup } });
+    replies = new Pool({ keepAliveTimeout: 20000, keepAliveMaxTimeout: 30000, connect: { lookup } });
   }
 } catch {}
