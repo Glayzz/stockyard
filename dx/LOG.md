@@ -47,3 +47,13 @@
 - 2026-10-07 B402: first settled payment. The agent (ERC-8004 id 365431) paid 0.01 U for /x402/league with the Studio runtime's fetchWithPayment; our server verified, answered and settled through B402. The settlement transaction was sent by B402's signer 0x34F7…0899, which paid the gas: https://bscscan.com/tx/0x1c6c4e13c8d063e00bb101e632f9bdd3b8a23ce71f055ae3971ad0c2bfa1f92f
 - 2026-10-07 Correction to the entry above about timing: the earlier attempt never reached the payment. Our own script gave up waiting for the top-up swap to confirm on a slow node and stopped, as it was written to. The swap had confirmed. Run again, the payment settled first time.
 - 2026-10-07 Trading: the agent's top-up used aggregator/quote and swap with BNB itself as the from-token, written as 0xeeee…eeee. No approve-transaction is needed for it, and the amount goes in the transaction's value.
+
+## 8 Oct 2026 · hosting
+
+- Moved the server from my PC in Nigeria (through a VPN in Germany) to a 2 GB AWS machine in Singapore. Same code, same key.
+- Binance Web3 API from Singapore: a quote in about 0.4 s, and the whole trade plan (quote, balance and allowance, approve-transaction, swap, Transaction API check) in about 1.4 s. From my PC the same plan took many seconds.
+- `/api/health` answered "binance: reachable" on the first try. No allowlist step was needed for the data and trading modules.
+- The earlier servers I had were in Ohio, and Binance turns US callers away, so the region had to be chosen before anything else. This is easy to miss: nothing in the portal asks where you will host.
+- HTTPS with no domain: Caddy plus the server's address under sslip.io got a Let's Encrypt certificate in about 10 seconds.
+- Telegram allows one long-polling copy of a bot, so the PC copy had to be switched off (`TELEGRAM_BOT=off`) when the hosted one started.
+- The x402 challenge now names the public https address as the resource, which is what B402 lists in its Bazaar after a settled call.
