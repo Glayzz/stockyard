@@ -57,3 +57,12 @@
 - HTTPS with no domain: Caddy plus the server's address under sslip.io got a Let's Encrypt certificate in about 10 seconds.
 - Telegram allows one long-polling copy of a bot, so the PC copy had to be switched off (`TELEGRAM_BOT=off`) when the hosted one started.
 - The x402 challenge now names the public https address as the resource, which is what B402 lists in its Bazaar after a settled call.
+
+## 8 Oct 2026 · B402 and the address of the site
+
+- First paid call against the hosted site failed. The agent signed, my server called B402 `verify`, and Binance answered HTTP 403 with an HTML page ("This request is blocked") from CloudFront, not the API's usual JSON with a code. Nothing was charged.
+- Cause, found by sending the same unsigned test payment with different addresses in `resource.url`: any address under `sslip.io` or `nip.io` in the request body is blocked by the firewall in front of the API. `localhost`, a bare IP, a `duckdns.org` name and an ordinary domain all pass and get the normal JSON answer. So the free "IP as a domain" names that make HTTPS easy cannot be used for a B402 seller.
+- This was invisible in testing on my PC, because there the resource address was `http://localhost:4173`.
+- It would help if B402 said this in the docs, or answered with a JSON error. As it is, the seller sees an HTML page inside a JSON API, and the buyer sees a 502.
+- While probing I also hit HTTP 429 after about ten calls in a few seconds on the same key.
+- Fix on my side: give the site a real name. Also changed the server to tell the buyer "B402 could not check this payment, nothing was charged" and to keep the reason at `/x402/last`.
