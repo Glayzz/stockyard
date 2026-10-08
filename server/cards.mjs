@@ -97,17 +97,19 @@ export async function leagueImage(rows, { title, total, start = 0 }, zh) {
   return k.c.toBuffer('image/png');
 }
 
-// A coin's logo. Fetched once and kept, with a short wait the first time; null if it cannot be had.
-const logos = new Map();
+// A coin's logo. Fetched once and kept, with a short wait the first time. One that cannot be had
+// is remembered too, for ten minutes, so a broken logo does not slow down every picture it is on.
+const logos = new Map(), missing = new Map();
 async function logo(lib, url) {
   if (!url) return null;
   if (logos.has(url)) return logos.get(url);
+  if (Date.now() - (missing.get(url) || 0) < 600000) return null;
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
+    const res = await fetch(url, { signal: AbortSignal.timeout(2500) });
     const img = res.ok ? await lib.loadImage(Buffer.from(await res.arrayBuffer())) : null;
-    if (img) logos.set(url, img);
+    if (img) logos.set(url, img); else missing.set(url, Date.now());
     return img;
-  } catch { return null; }
+  } catch { missing.set(url, Date.now()); return null; }
 }
 
 // One coin: its price, what backs its pool, and how much of today's move was the stock.

@@ -19,9 +19,10 @@ net.setDefaultAutoSelectFamilyAttemptTimeout?.(5000);
 const groups = process.env.STOCKYARD_TLS_GROUPS || 'X25519:P-256:P-384';
 if (groups !== 'auto') tls.DEFAULT_ECDH_CURVE = groups;
 
-// A second pool that never reuses a connection, for calls that must not be handed one that has
-// gone quiet: the Telegram bot's replies. It stays null if the pool class cannot be found.
-export let oneShot = null;
+// A second pool for the Telegram bot's replies. It keeps a connection open for twenty seconds, so a
+// run of taps does not pay for a new connection each time, and closes it before Telegram would.
+// It stays null if the pool class cannot be found.
+export let replies = null;
 
 // Node's fetch reads its connection pool from this well-known slot. Node does not expose the pool
 // class by name, so a replacement is built from the one already there; if that ever stops
@@ -32,6 +33,6 @@ try {
   const Pool = globalThis[slot]?.constructor;
   if (Pool) {
     globalThis[slot] = new Pool({ keepAliveTimeout: 60000, keepAliveMaxTimeout: 300000 });
-    oneShot = new Pool({ pipelining: 0 });
+    replies = new Pool({ keepAliveTimeout: 20000, keepAliveMaxTimeout: 30000 });
   }
 } catch {}

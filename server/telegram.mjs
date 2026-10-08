@@ -6,7 +6,7 @@
 // signed on the site in the user's own wallet.
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { oneShot } from './net.mjs';
+import { replies } from './net.mjs';
 import { handle } from './routes.mjs';
 import { status } from './status.mjs';
 import { slipImage } from './slip-image.mjs';
@@ -45,26 +45,30 @@ async function api(path, query) {
   return json;
 }
 
-// The long poll waits on purpose. Every other call should be quick, so one that hangs is cut short
-// and tried again, up to three times, each on a connection of its own. An answer from Telegram,
-// even a refusal, is final; only a call that never got through is repeated.
+// The long poll waits on purpose. Every other call should be quick, so one that hangs is cut short.
+// An answer from Telegram, even a refusal, is final. A call that never reached Telegram is tried
+// again, up to three times. One that may have reached it is tried again only when doing it twice
+// is harmless: a second sendPhoto would put the same picture in the chat twice.
+const NEVER_ARRIVED = new Set(['ETIMEDOUT', 'ECONNREFUSED', 'ECONNRESET', 'ENETUNREACH', 'EHOSTUNREACH', 'EAI_AGAIN', 'ENOTFOUND', 'EPIPE', 'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_SOCKET']);
+const MAKES_A_MESSAGE = new Set(['sendPhoto', 'sendMessage']);
 async function tg(method, body) {
   const form = body instanceof FormData, poll = method === 'getUpdates';
-  const limit = poll ? 40000 : form ? 30000 : 12000;
+  const limit = poll ? 40000 : form ? 45000 : 12000;
   for (let attempt = 1; ; attempt++) {
     try {
       const r = await fetch(`${base}/bot${token}/${method}`, {
         method: 'POST', body: form ? body : JSON.stringify(body || {}), signal: AbortSignal.timeout(limit),
         ...(!form && { headers: { 'content-type': 'application/json' } }),
-        ...(!poll && oneShot && { dispatcher: oneShot }),
+        ...(!poll && replies && { dispatcher: replies }),
       });
       const j = await r.json();
       if (!j.ok) throw Object.assign(new Error(j.description || 'Telegram answered ' + r.status), { code: j.error_code, said: true });
       return j.result;
     } catch (err) {
-      if (err.said || poll || attempt === 3) throw err;
-      console.log(`telegram: ${method} did not get through (${err.cause?.code || err.name}), trying again`);
-      await sleep(400 * attempt);
+      const why = err.cause?.code || err.name;
+      if (err.said || poll || attempt === 3 || (MAKES_A_MESSAGE.has(method) && !NEVER_ARRIVED.has(why))) throw err;
+      console.log(`telegram: ${method} did not get through (${why}), trying again`);
+      await sleep(300 * attempt);
     }
   }
 }
@@ -75,31 +79,63 @@ const link = (text, url) => ({ text, url });
 const markup = (keys) => (keys?.length ? { reply_markup: { inline_keyboard: keys } } : {});
 const same = (err) => /not modified/i.test(err.message);
 const send = (chat, html, keys) => tg('sendMessage', { chat_id: chat, text: html, parse_mode: 'HTML', link_preview_options: { is_disabled: true }, ...markup(keys) });
-function sendPhoto(chat, png, caption, keys) {
+// A picture goes out as its bytes the first time. Telegram answers with an id for it, and from
+// then on the id is sent instead: nothing to upload, so it arrives at once.
+function sendPhoto(chat, media, caption, keys) {
+  if (typeof media === 'string') return tg('sendPhoto', { chat_id: chat, photo: media, caption, parse_mode: 'HTML', ...markup(keys) });
   const form = new FormData();
   form.set('chat_id', String(chat)); form.set('caption', caption); form.set('parse_mode', 'HTML');
   if (keys?.length) form.set('reply_markup', JSON.stringify({ inline_keyboard: keys }));
-  form.set('photo', new Blob([png], { type: 'image/png' }), 'stockyard.png');
+  form.set('photo', new Blob([media], { type: 'image/png' }), 'stockyard.png');
   return tg('sendPhoto', form);
 }
-function editMedia(chat, message, png, caption, keys) {
+function editMedia(chat, message, media, caption, keys) {
+  if (typeof media === 'string') return tg('editMessageMedia', { chat_id: chat, message_id: message, media: { type: 'photo', media, caption, parse_mode: 'HTML' }, ...markup(keys) });
   const form = new FormData();
   form.set('chat_id', String(chat)); form.set('message_id', String(message));
   form.set('media', JSON.stringify({ type: 'photo', media: 'attach://photo', caption, parse_mode: 'HTML' }));
   if (keys?.length) form.set('reply_markup', JSON.stringify({ inline_keyboard: keys }));
-  form.set('photo', new Blob([png], { type: 'image/png' }), 'stockyard.png');
+  form.set('photo', new Blob([media], { type: 'image/png' }), 'stockyard.png');
   return tg('editMessageMedia', form);
 }
 const busy = (chat, action) => { tg('sendChatAction', { chat_id: chat, action }).catch(() => {}); };
 
+// Pictures Telegram already holds, by what they show. The same screen opened again within a few
+// minutes reuses the picture instead of drawing and uploading it again. They are kept in the
+// bot's saved state, so a restart does not send everyone back to slow first uploads.
+const held = (key, keep) => { const p = key && state.pictures?.[key]; return p && Date.now() - p.at < keep ? p.id : null; };
+const hold = (key, media, msg) => {
+  const sizes = msg?.photo;
+  if (!key || typeof media === 'string' || !sizes?.length) return msg;
+  const all = (state.pictures ??= {});
+  all[key] = { id: sizes[sizes.length - 1].file_id, at: Date.now() };
+  // Old ones are dropped once there are many, so the file stays small.
+  if (Object.keys(all).length > 400) for (const k of Object.keys(all)) if (Date.now() - all[k].at > 3600000) delete all[k];
+  save();
+  return msg;
+};
+
 // Show a whole screen. With a picture it replaces the picture under the tapped button; where it
 // cannot (the tap came from a text message), it sends the picture and clears the text away.
-async function screen(ctx, { png, caption, text, keys }) {
-  if (png) {
-    if (ctx.msg && ctx.photo) { try { return await editMedia(ctx.chat, ctx.msg, png, caption, keys); } catch (err) { if (same(err)) return null; } }
-    const sent = await sendPhoto(ctx.chat, png, caption, keys);
-    if (ctx.msg && !ctx.photo) tg('deleteMessage', { chat_id: ctx.chat, message_id: ctx.msg }).catch(() => {});
-    return sent;
+// key names what the picture shows, keep is how long one already sent stays good, draw makes it.
+async function screen(ctx, { key, keep = 300000, draw, caption, text, keys }) {
+  const began = Date.now(), edit = Boolean(ctx.msg && ctx.photo);
+  let media = held(key, keep);
+  if (!media && draw) { busy(ctx.chat, 'upload_photo'); media = await draw().catch(() => null); }
+  for (let again = false; media; again = true) {
+    try {
+      let sent;
+      if (edit) { try { sent = await editMedia(ctx.chat, ctx.msg, media, caption, keys); } catch (err) { if (same(err)) return null; if (err.said && typeof media === 'string') throw err; } }
+      sent ??= await sendPhoto(ctx.chat, media, caption, keys);
+      if (ctx.msg && !ctx.photo) tg('deleteMessage', { chat_id: ctx.chat, message_id: ctx.msg }).catch(() => {});
+      ctx.how = `${typeof media === 'string' ? 'kept picture' : Math.round(media.length / 1024) + ' KB picture'}, ${Date.now() - began} ms to draw and send`;
+      return hold(key, media, sent);
+    } catch (err) {
+      // An id Telegram no longer takes: forget it and draw the picture again, once.
+      if (!(typeof media === 'string' && err.said && !again && draw)) throw err;
+      delete state.pictures?.[key];
+      media = await draw().catch(() => null);
+    }
   }
   // No image library on this server: the same screen in words.
   if (ctx.msg && !ctx.photo) { try { return await tg('editMessageText', { chat_id: ctx.chat, message_id: ctx.msg, text: text || caption, parse_mode: 'HTML', link_preview_options: { is_disabled: true }, ...markup(keys) }); } catch (err) { if (same(err)) return null; } }
@@ -136,7 +172,7 @@ async function home(ctx) {
     [btn(zh ? '🔔 发薪提醒' : '🔔 Payday alerts', 'al'), btn(zh ? '🌐 English' : '🌐 中文', 'lg')],
   ];
   if (site) keys.push([link(zh ? '打开 Stockyard 网站 ↗' : 'Open the Stockyard site ↗', site)]);
-  return screen(ctx, { png: await homeImage(lg.stats, lg.rows.filter(listed).length, zh).catch(() => null), caption, keys });
+  return screen(ctx, { key: 'home:' + ctx.c.lang, keep: 1800000, draw: () => homeImage(lg.stats, lg.rows.filter(listed).length, zh), caption, keys });
 }
 
 function askWallet(ctx) {
@@ -187,10 +223,12 @@ async function slip(ctx, wallet, refresh) {
     [btn(zh ? '↻ 刷新' : '↻ Refresh', 'r:' + d.wallet), btn(zh ? '🏠 首页' : '🏠 Home', 'hn')],
   ];
   if (site) keys.splice(1, 0, [link(zh ? '在网站上打开，再投资 ↗' : 'Open on the site to reinvest ↗', `${site}/payslip.html?w=${d.wallet}`)]);
-  const png = await slipImage(d, zh).catch(() => null);
-  if (!png) return send(chat, `${slipCaption(d, zh)}\n\n${slipText(d, zh)}`, keys);
-  if (refresh && ctx.msg && ctx.photo) { try { return await editMedia(chat, ctx.msg, png, slipCaption(d, zh), keys); } catch (err) { if (same(err)) return null; } }
-  return sendPhoto(chat, png, slipCaption(d, zh), keys);
+  // A slip just printed for this wallet is reused for two minutes; Refresh always draws a new one.
+  const key = `slip:${c.lang}:${d.wallet}`, caption = slipCaption(d, zh);
+  const media = (!refresh && held(key, 120000)) || await slipImage(d, zh).catch(() => null);
+  if (!media) return send(chat, `${caption}\n\n${slipText(d, zh)}`, keys);
+  if (refresh && ctx.msg && ctx.photo) { try { return hold(key, media, await editMedia(chat, ctx.msg, media, caption, keys)); } catch (err) { if (same(err)) return null; } }
+  return hold(key, media, await sendPhoto(chat, media, caption, keys));
 }
 
 // Ten coins to a page, with a button for each one on it.
@@ -225,7 +263,7 @@ async function league(ctx, ticker, page = 0) {
     : stack(`🏆 <b>${esc(title)}</b>`, 'Ranked by the real stock sitting in each coin\'s pool.', '', where, '', 'Tap a coin below for its card.', '<i>Or send me a coin\'s name or its contract address.</i>');
   const medal = ['🥇', '🥈', '🥉'];
   const text = `${caption}\n\n` + (list.length ? list.map((r, i) => `${medal[page * 10 + i] || `${page * 10 + i + 1}.`} <b>${esc(r.coin)}</b> · ${esc(nameOf(r, zh))} · <b>${usd(r.stockUsd)}</b>`).join('\n') : esc(zh ? `没有与 ${want} 配对、市值 $100K 以上的币。` : `No coin worth $100K or more trades against ${want}.`));
-  return screen(ctx, { png: await leagueImage(list, { title, total: lg.stats.stockUsd, start: page * 10 }, zh).catch(() => null), caption, text, keys });
+  return screen(ctx, { key: `league:${ctx.c.lang}:${want}:${page}`, keep: 600000, draw: () => leagueImage(list, { title, total: lg.stats.stockUsd, start: page * 10 }, zh), caption, text, keys });
 }
 
 // Every company that has a listed coin trading against it, as buttons.
@@ -290,7 +328,7 @@ async function coin(ctx, q) {
   if (social.length) keys.push(social);
   keys.push([link('BscScan ↗', 'https://bscscan.com/token/' + r.address), ...(site ? [link(t('Trade on Stockyard ↗', '去 Stockyard 交易 ↗'), `${site}/coin.html?a=${r.address}`)] : own.dex ? [link('DexScreener ↗', own.dex)] : [])]);
   keys.push([btn(t('‹ League', '‹ 排行榜'), 'l:'), btn(t('🏠 Home', '🏠 首页'), 'h')]);
-  return screen(ctx, { png: await coinImage(d, split, zh).catch(() => null), caption, keys });
+  return screen(ctx, { key: `coin:${ctx.c.lang}:${r.address}`, keep: 180000, draw: () => coinImage(d, split, zh), caption, keys });
 }
 
 // Pick a size, then see what that trade would give. Nothing is bought or sold from the chat.
@@ -455,7 +493,7 @@ async function onUpdate(u) {
     if (msg?.text) await onText(ctx, msg.text);
     else if (cb?.data) await onTap(ctx, cb.data);
     status.telegramAnsweredAt = new Date().toISOString();
-    console.log(`telegram: ${what} answered in ${Date.now() - began} ms`);
+    console.log(`telegram: ${what} answered in ${Date.now() - began} ms` + (ctx.how ? ` (${ctx.how})` : ''));
   } catch (err) {
     status.telegramError = { at: new Date().toISOString(), what, message: String(err.message).slice(0, 120) };
     console.log(`telegram: ${what} failed after ${Date.now() - began} ms: ${err.message}`);
