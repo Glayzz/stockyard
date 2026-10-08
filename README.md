@@ -51,6 +51,11 @@ Built during the hackathon build window, 16 September to 11 October 2026, and li
   own wallet, using the Studio runtime's x402 client. Binance's B402 settled it and paid the gas, in
   [this transaction](https://bscscan.com/tx/0x1c6c4e13c8d063e00bb101e632f9bdd3b8a23ce71f055ae3971ad0c2bfa1f92f). The agent had funded itself first by swapping BNB into U through
   Binance's aggregator.
+- Paid on the hosted site: on 8 Oct 2026 the agent paid 0.01 U for the live
+  `https://stockyardbnb.duckdns.org/x402/league`. B402 verified it, the server answered, and B402's
+  own signer settled it and paid the gas, in
+  [this transaction](https://bscscan.com/tx/0xee59cb7866e5a705dc58c4682399441a86a0b47970784c6dfcc854410ad8ee85):
+  0.01 U from the agent's wallet to the project's receiving address.
 - Hosted since 8 Oct 2026 on one small AWS server in Singapore, set up by `deploy/setup.sh`: the
   site, the API, the paid routes and the Telegram bot in one Node process, with Caddy in front for
   HTTPS. From there a Binance quote comes back in about 0.4 s and a full trade plan (quote,

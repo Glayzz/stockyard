@@ -72,3 +72,9 @@
 - Moved the site to a free DuckDNS name (stockyardbnb.duckdns.org). The same unsigned test payment that got the 403 page under sslip.io now gets the normal JSON answer from B402 `verify` ("invalid_exact_evm_payload_signature", which is right for a made-up signature).
 - Phone trading: a phone's own browser has no wallet, so the page links into wallet apps' browsers. Binance Wallet's link format is not in the Web3 API docs; I took it from the published @binance/w3w-utils package (`bnc://app.binance.com/mp/app?appId=…&startPagePath=…&startPageQuery=…`, wrapped as `https://app.binance.com/en/download?_dp=`).
 - My mobile carrier's DNS does not resolve relay.walletconnect.org (it also blocks binance.com), so WalletConnect cannot be tested from my own network without a VPN. The page now checks the relay first and says so.
+
+## 8 Oct 2026 · first paid call on the hosted site
+
+- The agent paid 0.01 U for https://stockyardbnb.duckdns.org/x402/league and B402 settled it: https://bscscan.com/tx/0xee59cb7866e5a705dc58c4682399441a86a0b47970784c6dfcc854410ad8ee85 (block 126496388, sent by B402's signer 0x34F7…0899, 0.01 U from the agent wallet to my receiving address). So the 403 really was the sslip.io name and nothing else: same code, same key, a different host name.
+- Two tries before it failed on my side, not Binance's: my connection's DNS gave no answer for the site's name (getaddrinfo EAI_AGAIN). The script now asks a public resolver when that happens.
+- The Telegram bot lost about one call in four to api.telegram.org from the AWS server until I found that Node gives each address of a name only 250 ms to connect (the server has no IPv6, Telegram has an IPv6 address). Not a Binance issue, but it cost an evening.

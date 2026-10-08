@@ -9,7 +9,9 @@ const AGENT = { id: 365431, wallet: '0x1E8316cE99376E8E1F5E6b6482243e4d47DADdc3'
 const PROOF = {
   trade: '0x6eb3cea632d3e97a17089c1a1576f68f2e84e560161e4cab2e3734a462b37f74',
   topUp: '0x15a2af9c65893c1c3f77efca93c203b532a7a20e0bcc13d34211284197b595e3',
-  paid: '0x1c6c4e13c8d063e00bb101e632f9bdd3b8a23ce71f055ae3971ad0c2bfa1f92f',
+  // The paid call against the hosted site, 8 Oct 2026. The first one, a day earlier against a
+  // local server, was 0x1c6c4e13…f92f.
+  paid: '0xee59cb7866e5a705dc58c4682399441a86a0b47970784c6dfcc854410ad8ee85',
 };
 // The default league only lists coins at or above these; the Show all switch lifts them.
 const MIN_MCAP = 100000, MIN_STOCK_USD = 1000;
