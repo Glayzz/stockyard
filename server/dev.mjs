@@ -1,6 +1,6 @@
 // Local server: the pages in public/ plus the /api routes. Usage: node server/dev.mjs [port]
 import { createServer } from 'node:http';
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { extname, join, normalize, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { handle } from './routes.mjs';
@@ -40,7 +40,15 @@ const server = createServer(async (req, res) => {
   const file = normalize(join(pub, url.pathname === '/' ? 'index.html' : decodeURIComponent(url.pathname)));
   if (!file.startsWith(pub + sep)) return send(res, 403, 'text/plain', 'Forbidden');
   try {
-    send(res, 200, TYPES[extname(file)] || 'application/octet-stream', await readFile(file));
+    // A visit always asks whether a file changed, and only downloads it again if it did.
+    const info = await stat(file);
+    if (!info.isFile()) throw new Error('Not a file');
+    const tag = `W/"${info.size}-${Math.round(info.mtimeMs)}"`;
+    const headers = { 'content-type': TYPES[extname(file)] || 'application/octet-stream', 'cache-control': file.includes(sep + 'vendor' + sep) ? 'public, max-age=86400' : 'no-cache', etag: tag };
+    if (req.headers['if-none-match'] === tag) { res.writeHead(304, headers); return res.end(); }
+    const body = await readFile(file);
+    res.writeHead(200, headers);
+    res.end(body);
   } catch {
     send(res, 404, 'text/plain', 'Not found');
   }

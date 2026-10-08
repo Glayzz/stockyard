@@ -9,12 +9,26 @@
 //     receive: { decimals, text(n), usd } }        what arrives, and its dollar price per unit
 let WALLET = null;
 // The wallet in use: the one built into this browser, or one reached over WalletConnect.
-let PROVIDER = window.ethereum || null, WC = null;
+let PROVIDER = null, WC = null;
 const FLOWS = new Set();
 const TRANSFER = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
 const PHONE = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 const onAccounts = (list) => { WALLET = list[0] || null; for (const f of FLOWS) { f.clear(); f.render(); } };
-if (window.ethereum?.on) window.ethereum.on('accountsChanged', onAccounts);
+// A wallet is listened to from the moment it is chosen, and only while it is the one in use.
+const HEARD = new WeakSet();
+const listen = (p) => { if (!p?.on || HEARD.has(p)) return; HEARD.add(p); p.on('accountsChanged', (list) => { if (PROVIDER === p) onAccounts(list); }); };
+
+// Wallets built into this browser announce themselves by name (EIP-6963), so the page can offer
+// the same wallets everywhere and connect to the exact one chosen.
+const FOUND = new Map();
+const KNOWN = [['Binance Wallet', /binance/], ['MetaMask', /metamask/], ['Trust Wallet', /trust/], ['OKX Wallet', /okx|okex/], ['Bitget Wallet', /bitget|bitkeep/]];
+window.addEventListener('eip6963:announceProvider', (e) => {
+  const { info, provider } = e.detail || {};
+  if (!info?.rdns || !provider || FOUND.has(info.rdns)) return;
+  FOUND.set(info.rdns, { name: String(info.name || info.rdns).slice(0, 24), key: (info.rdns + ' ' + (info.name || '')).toLowerCase(), provider });
+  if (!WALLET) for (const f of FLOWS) f.render();
+});
+window.dispatchEvent(new Event('eip6963:requestProvider'));
 
 // WalletConnect reaches any wallet app from an ordinary browser: a list of wallets on a phone,
 // a QR code on a computer. Its code is 2 MB (public/vendor, built from
@@ -29,7 +43,7 @@ async function walletConnect() {
     metadata: { name: 'Stockyard', description: 'The home for stock memes on BNB Chain', url: location.origin, icons: [] },
   });
   wc.on('accountsChanged', (list) => { if (PROVIDER === wc) onAccounts(list); });
-  wc.on('disconnect', () => { remember(false); if (PROVIDER === wc) { PROVIDER = window.ethereum || null; onAccounts([]); } });
+  wc.on('disconnect', () => { remember(false); if (PROVIDER === wc) { PROVIDER = null; onAccounts([]); } });
   return (WC = wc);
 }
 // Coming back from the wallet app, a phone may reload this page: pick the connection up again.
@@ -91,22 +105,43 @@ function tradeFlow(box, job) {
     const ready = plan && planFor === keyOf(j) ? plan : null;
     if (ready && !ready.wallet.enough) say(zh ? `钱包 ${short(WALLET)} 只有 ${j.spend.text(ready.wallet.balance)}。` : `Wallet ${short(WALLET)} holds only ${j.spend.text(ready.wallet.balance)}.`, 'down');
     else say(t('Wallet ', '钱包 ') + short(WALLET) + (WC && PROVIDER === WC ? ' · WalletConnect' : '') + (ready ? ' · ' + (ready.wallet.needsApproval ? t('you will confirm twice: once to allow the token, once to swap', '需要在钱包里确认两次：先授权，再兑换') : t('you will confirm once in your wallet', '只需在钱包里确认一次')) : ''));
-    if (WC && PROVIDER === WC) button(t('Disconnect', '断开连接'), () => { remember(false); WC.disconnect().catch(() => {}); PROVIDER = window.ethereum || null; onAccounts([]); }, true);
+    const change = el('button', 'copy', t('Change wallet', '更换钱包'));
+    change.type = 'button';
+    change.onclick = () => { if (WC && PROVIDER === WC) { remember(false); WC.disconnect().catch(() => {}); } PROVIDER = null; onAccounts([]); };
+    box.append(change);
     // Get the trade ready before the click, so the click goes straight to the wallet.
     if (!ready) prepare(j).then(() => { if (!stage) render(); }, () => {});
   }
 
-  // No wallet connected yet. A browser with a wallet in it gets one button. A phone's own browser
-  // has none, so it gets links that reopen this page inside a wallet app, where that button shows.
-  // WalletConnect, when it is set up, covers every other wallet from either kind of browser.
+  // No wallet connected yet. The same wallets are offered by name everywhere; what a button does
+  // depends on where the page is open.
   function howToConnect(j) {
-    const viaWC = () => button(window.ethereum ? t('Another wallet · WalletConnect', '其他钱包 · WalletConnect') : 'WalletConnect', () => connect(true), true);
-    if (window.ethereum) { button(t('Connect wallet', '连接钱包'), connect); if (WALLETCONNECT_ID) viaWC(); return; }
+    const found = [...FOUND.values()];
+    // Inside a wallet app's own browser there is exactly one wallet: offer it and nothing else.
+    if (PHONE && (found.length || window.ethereum)) return void button(t('Connect wallet', '连接钱包'), () => connect(found[0]?.provider || window.ethereum));
+    // A phone's own browser has no wallet: each button reopens this page inside that wallet's app.
     if (PHONE) return noWallet(j);
-    if (!WALLETCONNECT_ID) return say(t('To trade, open this page in a browser with a BNB Chain wallet such as Binance Wallet or MetaMask.', '要交易，请在装有 BNB Chain 钱包（如币安钱包或 MetaMask）的浏览器中打开本页。'));
-    say(t('This browser has no wallet in it. Connect the wallet on your phone by scanning a code:', '这个浏览器里没有钱包。用手机钱包扫码连接：'));
-    viaWC();
+    // On a computer a wallet found in this browser connects directly, and the others open a QR
+    // code for the wallet app on a phone, through WalletConnect.
+    say(t('Connect a wallet to trade:', '连接钱包以交易：'));
+    const row = el('div', 'wallets');
+    const add = (name, here, fn) => { const b = el('button', 'btn' + (here ? '' : ' plain'), name); b.type = 'button'; b.onclick = fn; row.append(b); };
+    const used = new Set();
+    for (const [name, like] of KNOWN) {
+      const w = found.find((x) => like.test(x.key));
+      if (w) { used.add(w); add(name, true, () => connect(w.provider)); }
+      else add(name, false, () => (WALLETCONNECT_ID ? connect(true) : missing(name)));
+    }
+    for (const w of found) if (!used.has(w)) add(w.name, true, () => connect(w.provider));
+    // A wallet that does not announce itself still sits at window.ethereum.
+    if (!found.length && window.ethereum) add(t('Browser wallet', '浏览器钱包'), true, () => connect(window.ethereum));
+    if (WALLETCONNECT_ID) add('WalletConnect', false, () => connect(true));
+    box.append(row);
+    say(found.length || window.ethereum
+      ? t('The highlighted wallets are in this browser. The others open a QR code to scan with the wallet app on your phone.', '高亮的钱包已装在这个浏览器里。其他钱包会显示二维码，用手机上的钱包 App 扫一下即可。')
+      : t('No wallet is installed in this browser, so each one opens a QR code to scan with the wallet app on your phone.', '这个浏览器里没有安装钱包，所以每个按钮都会显示二维码，用手机上的钱包 App 扫一下即可。'));
   }
+  const missing = (name) => { note = { text: t(name + ' is not installed in this browser.', '这个浏览器没有安装 ' + name + '。'), bad: true }; render(); };
 
   // A phone's own browser has no wallet in it. These links reopen this page inside a wallet app's
   // browser, where the Connect button shows. Each follows that wallet's own documented link; the
@@ -155,11 +190,12 @@ function tradeFlow(box, job) {
     say(t('It opens there with this trade filled in and a Connect wallet button. With any other wallet, copy the link and paste it into the wallet\'s own browser.', '打开后这笔交易已填好，并会出现「连接钱包」按钮。其他钱包：复制链接，粘贴到钱包自带的浏览器里。'));
   }
 
-  // viaWalletConnect is true only from the WalletConnect button; a plain click passes its event.
-  async function connect(viaWalletConnect) {
+  // via is true for WalletConnect, or the wallet to use; anything else means the browser's own.
+  async function connect(via) {
+    const viaWalletConnect = via === true;
     try {
       let account;
-      if (viaWalletConnect === true) {
+      if (viaWalletConnect) {
         note = { text: t('Opening WalletConnect…', '正在打开 WalletConnect…') }; render();
         // Some networks block WalletConnect's server. Find that out now, before a window opens
         // that would only spin.
@@ -174,8 +210,10 @@ function tradeFlow(box, job) {
         if (!wc.session) await wc.connect();
         PROVIDER = wc; account = wc.accounts[0]; remember(true);
       } else {
-        PROVIDER = window.ethereum;
-        [account] = await PROVIDER.request({ method: 'eth_requestAccounts' });
+        const wallet = via?.request ? via : window.ethereum;
+        listen(wallet);
+        [account] = await wallet.request({ method: 'eth_requestAccounts' });
+        PROVIDER = wallet;
       }
       if (parseInt(await PROVIDER.request({ method: 'eth_chainId' })) !== 56)
         await PROVIDER.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x38' }] });
@@ -183,7 +221,7 @@ function tradeFlow(box, job) {
       for (const f of FLOWS) f.render();
     } catch (e) {
       // Closing the WalletConnect window is not an error worth showing.
-      const closed = viaWalletConnect === true && /reset|closed|expired/i.test(e?.message || '');
+      const closed = viaWalletConnect && /reset|closed|expired/i.test(e?.message || '');
       note = closed ? null : { text: t('Could not connect: ', '连接失败：') + (e?.message || e), bad: true };
       render();
     }

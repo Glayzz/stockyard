@@ -6,7 +6,7 @@
 <title>Stockyard · Stock memes on BNB Chain</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=JetBrains+Mono:wght@500;700&family=Noto+Sans+SC:wght@500;900&family=Space+Grotesk:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=JetBrains+Mono:wght@500;700&family=Noto+Sans+SC:wght@500;900&family=Space+Grotesk:wght@400;500;700&display=swap" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -107,7 +107,7 @@ const TOP_TILES = 5;
 const count = (n) => n.toLocaleString('en-US');
 
 async function load() {
-  state.data = await loadLeague();
+  state.data = await loadLeague(state.all);
   // After a restart the server answers with its last saved league until a fresh read finishes.
   const at = new Date(state.data.updatedAt), old = Date.now() - at > 600000;
   $('updated').textContent = old
@@ -199,19 +199,16 @@ function render() {
   renderNiuma(rows);
 }
 
+// Where NIUMA stands among every pool. The server works the ranks out, so the short list is enough.
 function renderNiuma(all) {
   const box = $('niuma');
-  const me = all.find((m) => m.address === NIUMA);
-  if (!me) { box.hidden = true; return; }
+  const me = all.find((m) => m.address === NIUMA), where = state.data.standing;
+  if (!me || !where) { box.hidden = true; return; }
   const name = stockName(me);
-  const peers = all.filter((m) => m.sym === me.sym);
-  const rankBy = (list, k) => list.slice().sort((a, b) => b[k] - a[k]).findIndex((m) => m.address === NIUMA) + 1;
-  const byHeld = peers.slice().sort((a, b) => b.shares - a.shares);
-  const pos = byHeld.findIndex((m) => m.address === NIUMA);
   const left = el('div');
   const p = el('p');
-  if (pos > 0) {
-    const ahead = byHeld[pos - 1], gap = (ahead.shares - me.shares).toFixed(3);
+  if (where.ahead) {
+    const ahead = where.ahead, gap = (ahead.shares - me.shares).toFixed(3);
     if (zh) p.append('距离 ' + name + ' 榜首 ' + ahead.coin + ' 只差 ', el('b', null, gap + ' 股'), '。');
     else p.append('Only ', el('b', null, gap + ' shares'), ' behind ' + ahead.coin + ' for the top spot in the ' + name + ' league.');
   } else {
@@ -221,9 +218,9 @@ function renderNiuma(all) {
   const ranks = el('div', 'ranks');
   const rank = (n, label) => { const r = el('div', 'rank'); r.append(el('div', 'n', '#' + n), el('div', 't', label)); return r; };
   ranks.append(
-    rank(rankBy(peers, 'mcap'), t(name + ' by size', name + ' 市值排名')),
-    rank(pos + 1, t(name + ' by stock', name + ' 持股排名')),
-    rank(rankBy(all, 'stockUsd'), t('of ' + count(all.length) + ' coins', '共 ' + count(all.length) + ' 个币')));
+    rank(where.bySize, t(name + ' by size', name + ' 市值排名')),
+    rank(where.byStock, t(name + ' by stock', name + ' 持股排名')),
+    rank(where.ofAll, t('of ' + count(where.coins) + ' coins', '共 ' + count(where.coins) + ' 个币')));
   box.replaceChildren(avatar(me.logo, me.coin), left, ranks);
   box.href = 'coin.html?a=' + NIUMA;
   box.hidden = false;
@@ -239,7 +236,11 @@ const pick = (id, attr, apply) => {
   };
 };
 pick('sort', 'k', (v) => { state.sort = v; });
-pick('scope', 'all', (v) => { state.all = v === '1'; });
+// "Show all" fetches every pool the first time it is asked for.
+pick('scope', 'all', (v) => {
+  state.all = v === '1';
+  if (state.all && state.data?.scope === 'listed') { $('updated').textContent = t('Loading every pool…', '正在加载全部池子…'); refresh(); }
+});
 
 const refresh = () => load().catch((err) => {
   $('updated').textContent = t('Could not load live data: ', '无法加载实时数据：') + err.message;

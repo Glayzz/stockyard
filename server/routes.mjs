@@ -9,6 +9,19 @@ import { status as parts } from './status.mjs';
 const CHAIN = '56';
 const isAddr = (a) => /^0x[0-9a-fA-F]{40}$/.test(a || '');
 const bad = (message) => Object.assign(new Error(message), { status: 400 });
+const NIUMA = '0xc01a2e136f92772eecab15eb054e8f6fa06b7777';
+const listed = (r) => r.mcap >= 100000 && r.stockUsd >= 1000;
+
+// Where the flagship coin stands among every pool, worked out here so the home page does not
+// have to download them all to say it.
+function standing(rows) {
+  const me = rows.find((r) => r.address === NIUMA);
+  if (!me) return null;
+  const peers = rows.filter((r) => r.sym === me.sym);
+  const rank = (list, k) => list.filter((r) => r[k] > me[k]).length + 1;
+  const ahead = peers.filter((r) => r.shares > me.shares).sort((a, b) => a.shares - b.shares)[0];
+  return { bySize: rank(peers, 'mcap'), byStock: rank(peers, 'shares'), ofAll: rank(rows, 'stockUsd'), coins: rows.length, ahead: ahead ? { coin: ahead.coin, shares: ahead.shares } : null };
+}
 
 const routes = {
   // Is the server up, and can it reach Binance from where it is hosted?
@@ -20,7 +33,14 @@ const routes = {
   }),
 
   // Every stock-paired pool that holds stock, read from the chain. Cached for two minutes.
-  'GET /api/league': () => league(),
+  // ?scope=listed sends only the coins worth $100K or more, about a hundredth of the full answer.
+  'GET /api/league': async (q) => {
+    const lg = await league(), where = standing(lg.rows);
+    if (q.scope !== 'listed') return { ...lg, standing: where };
+    // The short answer also leaves out the stock profiles, which no page reads from here.
+    const { stocks, ...rest } = lg;
+    return { ...rest, scope: 'listed', rows: lg.rows.filter((r) => listed(r) || r.address === NIUMA), standing: where };
+  },
 
   // The league as a short, filtered list, for agents and scripts. Defaults to coins worth $100K or more.
   'GET /api/memes': async (q) => {
@@ -42,7 +62,6 @@ const routes = {
   // symbol, name or address matches, listed ones first.
   'GET /api/search': async (q) => {
     const lg = await league(), text = String(q.q || '').trim().toLowerCase().slice(0, 60);
-    const listed = (r) => r.mcap >= 100000 && r.stockUsd >= 1000;
     // One row per coin: its deepest stock pool.
     const best = new Map();
     for (const r of lg.rows) { const b = best.get(r.address); if (!b || r.stockUsd > b.stockUsd) best.set(r.address, r); }

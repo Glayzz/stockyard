@@ -32,6 +32,8 @@ const units = (amount, decimals = 18) => {
 const nameOf = (x, zh) => (zh && x.nameZh) || x.name;
 const day = (ms, zh, year) => new Date(ms).toLocaleDateString(zh ? 'zh-CN' : 'en-GB', year ? { day: 'numeric', month: 'short', year: 'numeric' } : { day: 'numeric', month: 'short' });
 const listed = (r) => r.mcap >= 100000 && r.stockUsd >= 1000;
+// A message is written as its lines, so the blank ones that give it room are plain to see.
+const stack = (...parts) => parts.join('\n');
 
 let token, site, base, state = { offset: 0, chats: {} };
 const save = () => { try { writeFileSync(STATE, JSON.stringify(state)); } catch {} };
@@ -108,8 +110,14 @@ async function home(ctx) {
   delete ctx.c.expect;
   const lg = await api('/api/league');
   const caption = zh
-    ? '<b>Stockyard</b> · 股票 Meme 的家\nBNB Chain 上与真实美股配对交易的 Meme 币，其中一些会用这只股票给持有人发工资。\n\n想看什么？'
-    : '<b>Stockyard</b> · the home for stock memes\nMeme coins on BNB Chain that trade against real US stocks. Some pay their holders in that stock.\n\nWhat do you want to see?';
+    ? stack('🐂 <b>Stockyard</b>', '股票 Meme 的家', '',
+      '股票 Meme 是 BNB Chain 上与真实美股配对交易的 Meme 币，而不是与 BNB 配对。其中一些会用这只股票给持有人发工资。', '',
+      '🧾 <b>工资条</b>  ·  一个钱包领到了多少股票', '🏆 <b>排行榜</b>  ·  所有股票 Meme 的排名', '🔔 <b>发薪提醒</b>  ·  钱包发薪时通知你', '',
+      '<i>随时可以把钱包地址或币名直接发给我。</i>')
+    : stack('🐂 <b>Stockyard</b>', 'The home for stock memes', '',
+      'Stock memes are meme coins on BNB Chain that trade against a real US stock instead of BNB. Some of them pay their holders in that stock.', '',
+      '🧾 <b>Payslip</b>  ·  what a wallet has been paid in stock', '🏆 <b>League</b>  ·  every stock meme, ranked', '🔔 <b>Payday alerts</b>  ·  a message when a wallet is paid', '',
+      '<i>You can also send me a wallet address or a coin\'s name at any time.</i>');
   const keys = [
     [btn(zh ? '🧾 工资条' : '🧾 Payslip', 'ps'), btn(zh ? '🏆 排行榜' : '🏆 League', 'l:')],
     [btn(zh ? '🔔 发薪提醒' : '🔔 Payday alerts', 'al'), btn(zh ? '🌐 English' : '🌐 中文', 'lg')],
@@ -122,26 +130,29 @@ function askWallet(ctx) {
   const zh = ctx.c.lang === 'zh';
   ctx.c.expect = 'slip';
   return say(ctx, zh
-    ? '🧾 <b>牛马工资条</b>\n把钱包地址（0x…）发给我，我把它的 Meme 用股票发给它的工资打印出来。'
-    : '🧾 <b>Payslip</b>\nSend me a wallet address (0x…) and I will print what its memes have paid it in stock.', [
+    ? stack('🧾 <b>牛马工资条</b>', '', '把钱包地址发给我，我就打印它的工资条：它持有的 Meme 用真实股票给它发过的每一笔工资。', '', '<i>地址以 0x 开头，共 42 个字符。</i>')
+    : stack('🧾 <b>牛马工资条 · Payslip</b>', '', 'Send me a wallet address and I will print its payslip: every payout its memes have made to it in real stock.', '', '<i>An address starts with 0x and is 42 characters long.</i>'), [
     [btn(zh ? '看个例子：NIUMA 金库' : 'Show me one: NIUMA\'s treasury', 'p:' + DEMO)], [btn(zh ? '‹ 首页' : '‹ Home', 'h')],
   ]);
 }
 
 function slipCaption(d, zh) {
-  const who = `<b>${short(d.wallet)}</b>`, from = d.employers.map((e) => e.coin).slice(0, 2).join(', ') + (d.employerCount > 2 ? ` +${d.employerCount - 2}` : '');
-  let text;
-  if (d.paid) text = zh
-    ? `${who} 已经领到 <b>${usd(d.paid.usd)}</b>${d.paid.atLeast ? '以上' : ''}的真实股票。\n自 ${day(d.paid.since, zh, true)} 起共 ${d.paid.count} 次` + (from ? `，来自 ${esc(from)}。` : '。')
-    : `${who} has been paid <b>${d.paid.atLeast ? 'at least ' : ''}${usd(d.paid.usd)}</b> in real stock.\n${d.paid.count} payouts since ${day(d.paid.since, zh, true)}` + (from ? `, from ${esc(from)}.` : '.');
-  else if (d.total > 0) text = zh
-    ? `${who} 持有 <b>${usd(d.total)}</b> 的代币化股票，但没有发现分红。自己买的股票不算工资。`
-    : `${who} holds <b>${usd(d.total)}</b> of tokenized stock, but no payouts were found. Stock you bought yourself is not pay.`;
-  else text = zh
-    ? `${who} 还没有股票。持有会发股票的 Meme（比如牛马 NIUMA），工资就会出现在这里。`
-    : `${who} holds no stock yet. Hold a stock meme that pays, like 牛马 NIUMA, and the pay shows up here.`;
-  if (!d.history) text += zh ? '\n暂时拿不到分红记录，这张工资条只显示余额。' : '\nPayout history is unavailable right now, so this slip shows balances only.';
-  return text;
+  const from = d.employers.map((e) => e.coin).slice(0, 3).join(', ') + (d.employerCount > 3 ? ` +${d.employerCount - 3}` : '');
+  const out = [zh ? `🧾 <b>${short(d.wallet)} 的工资条</b>` : `🧾 <b>Payslip for ${short(d.wallet)}</b>`, ''];
+  if (d.paid) {
+    out.push(zh ? `累计已发：<b>${usd(d.paid.usd)}</b>${d.paid.atLeast ? ' 以上' : ''}的真实股票` : `Paid to date:  <b>${d.paid.atLeast ? 'at least ' : ''}${usd(d.paid.usd)}</b> in real stock`);
+    out.push(zh ? `发放次数：<b>${d.paid.count}${d.paid.atLeast ? '+' : ''}</b> 次，自 ${day(d.paid.since, zh, true)} 起` : `Payouts:  <b>${d.paid.count}${d.paid.atLeast ? '+' : ''}</b>, the first on ${day(d.paid.since, zh, true)}`);
+    if (from) out.push(zh ? `发薪的 Meme：${esc(from)}` : `Paid by:  ${esc(from)}`);
+    out.push('', zh ? '<i>这张工资条可以保存或转发。点「刷新」会用最新的发放记录重画。</i>' : '<i>Keep or forward this slip. Refresh redraws it with the latest payouts.</i>');
+  } else if (d.total > 0) {
+    out.push(zh ? `这个钱包持有 <b>${usd(d.total)}</b> 的代币化股票，但没有发现发给它的分红。` : `This wallet holds <b>${usd(d.total)}</b> of tokenized stock, but I found no payouts to it.`, '',
+      zh ? '自己买的股票不算工资。持有会给持有人发股票的 Meme（比如牛马 NIUMA），工资就会出现在这里。' : 'Stock you bought yourself is not pay. Hold a stock meme that pays its holders, like 牛马 NIUMA, and the pay shows up here.');
+  } else {
+    out.push(zh ? '这个钱包还没有代币化股票。' : 'This wallet holds no tokenized stock yet.', '',
+      zh ? '持有会给持有人发股票的 Meme（比如牛马 NIUMA），工资就会出现在这里。' : 'Hold a stock meme that pays its holders, like 牛马 NIUMA, and its pay will show up here.');
+  }
+  if (!d.history) out.push('', zh ? '⚠️ 暂时拿不到分红记录，这张工资条只显示余额。' : '⚠️ Payout history is unavailable right now, so this slip shows balances only.');
+  return out.join('\n');
 }
 // The payslip in words, for when the image cannot be drawn.
 function slipText(d, zh) {
@@ -164,7 +175,7 @@ async function slip(ctx, wallet, refresh) {
   ];
   if (site) keys.splice(1, 0, [link(zh ? '在网站上打开，再投资 ↗' : 'Open on the site to reinvest ↗', `${site}/payslip.html?w=${d.wallet}`)]);
   const png = await slipImage(d, zh).catch(() => null);
-  if (!png) return send(chat, `🧾 <b>牛马工资条${zh ? '' : ' · Payslip'}</b>\n${slipCaption(d, zh)}\n\n${slipText(d, zh)}`, keys);
+  if (!png) return send(chat, `${slipCaption(d, zh)}\n\n${slipText(d, zh)}`, keys);
   if (refresh && ctx.msg && ctx.photo) { try { return await editMedia(chat, ctx.msg, png, slipCaption(d, zh), keys); } catch (err) { if (same(err)) return null; } }
   return sendPhoto(chat, png, slipCaption(d, zh), keys);
 }
@@ -195,10 +206,10 @@ async function league(ctx, ticker, page = 0) {
   keys.push([btn(mark(!want, zh ? '全部' : 'All'), 'l:'), ...top.map((s) => btn(mark(s.ticker === want, s.name), 'l:' + s.ticker))]);
   keys.push([btn(zh ? '🏢 全部公司' : '🏢 All companies', 'lc'), btn(zh ? '🏠 首页' : '🏠 Home', 'h')]);
   const title = want && list.length ? (zh ? `${nameOf(list[0], zh)} 排行榜` : `The ${nameOf(list[0], zh)} league`) : (zh ? '股票排行榜' : 'The stock league');
-  const where = pages > 1 ? (zh ? `第 ${page + 1} / ${pages} 页，共 ${all.length} 个币。` : `Page ${page + 1} of ${pages}, ${all.length} coins. `) : '';
+  const where = zh ? `第 ${page + 1} / ${pages} 页  ·  共 ${all.length} 个币` : `Page ${page + 1} of ${pages}  ·  ${all.length} ${all.length === 1 ? 'coin' : 'coins'}`;
   const caption = zh
-    ? `🏆 <b>${esc(title)}</b>\n${where}点一个币看它的卡片。也可以直接把币名或合约地址发给我。`
-    : `🏆 <b>${esc(title)}</b>\n${where}Tap a coin for its card. You can also just send me a coin's name or its contract address.`;
+    ? stack(`🏆 <b>${esc(title)}</b>`, '按每个币的池子里有多少真实股票排名。', '', where, '', '点下面的币，看它的卡片。', '<i>也可以直接把币名或合约地址发给我。</i>')
+    : stack(`🏆 <b>${esc(title)}</b>`, 'Ranked by the real stock sitting in each coin\'s pool.', '', where, '', 'Tap a coin below for its card.', '<i>Or send me a coin\'s name or its contract address.</i>');
   const medal = ['🥇', '🥈', '🥉'];
   const text = `${caption}\n\n` + (list.length ? list.map((r, i) => `${medal[page * 10 + i] || `${page * 10 + i + 1}.`} <b>${esc(r.coin)}</b> · ${esc(nameOf(r, zh))} · <b>${usd(r.stockUsd)}</b>`).join('\n') : esc(zh ? `没有与 ${want} 配对、市值 $100K 以上的币。` : `No coin worth $100K or more trades against ${want}.`));
   return screen(ctx, { png: await leagueImage(list, { title, total: lg.stats.stockUsd, start: page * 10 }, zh).catch(() => null), caption, text, keys });
@@ -213,7 +224,9 @@ async function companies(ctx) {
   const keys = [];
   for (let i = 0; i < list.length; i += 2) keys.push(list.slice(i, i + 2).map((s) => btn(`${s.name} · ${s.n}`, 'l:' + s.ticker)));
   keys.push([btn(zh ? '‹ 排行榜' : '‹ League', 'l:')]);
-  return say(ctx, zh ? '🏢 <b>选一家公司</b>\n数字是与它配对、市值 $100K 以上的币的数量。' : '🏢 <b>Pick a company</b>\nThe number is how many coins worth $100K or more trade against it.', keys);
+  return say(ctx, zh
+    ? stack('🏢 <b>选一家公司</b>', '', '每个按钮是一只有 Meme 币与它配对交易的美股。', '', '旁边的数字是与它配对、市值 $100K 以上的币的数量。')
+    : stack('🏢 <b>Pick a company</b>', '', 'Each button is a US stock that meme coins trade against.', '', 'The number beside it is how many coins worth $100K or more are paired with it.'), keys);
 }
 
 // A coin by address, or by symbol: the one with the most stock in its pool wins a name clash.
@@ -223,7 +236,13 @@ async function findCoin(q, listedOnly) {
   const rows = lg.rows.filter((r) => (isAddr(key) ? r.address === key : r.coin.toLowerCase() === key) && (!listedOnly || listed(r))).sort((a, b) => b.stockUsd - a.stockUsd);
   return rows[0] ? { row: rows[0], stockPrice: lg.stocks[rows[0].sym]?.price || 0 } : null;
 }
-const noCoin = (ctx, q) => say(ctx, esc(ctx.c.lang === 'zh' ? `没有叫“${q}”的股票 Meme。` : `There is no stock meme called "${q}".`), [[btn(ctx.c.lang === 'zh' ? '🏆 排行榜' : '🏆 League', 'l:'), btn(ctx.c.lang === 'zh' ? '🏠 首页' : '🏠 Home', 'h')]]);
+const noCoin = (ctx, q) => {
+  const zh = ctx.c.lang === 'zh';
+  return say(ctx, zh
+    ? stack(`🔎 <b>没有叫“${esc(q)}”的股票 Meme</b>`, '', '检查一下拼写，或者把它的合约地址发给我，也可以去排行榜里找。')
+    : stack(`🔎 <b>No stock meme called "${esc(q)}"</b>`, '', 'Check the spelling, send me its contract address instead, or look for it in the league.'),
+  [[btn(zh ? '🏆 排行榜' : '🏆 League', 'l:'), btn(zh ? '🏠 首页' : '🏠 Home', 'h')]]);
+};
 
 async function coin(ctx, q) {
   const zh = ctx.c.lang === 'zh', t = (en, cn) => (zh ? cn : en);
@@ -234,10 +253,20 @@ async function coin(ctx, q) {
   // Split the last 24 hours of hourly closes into the coin's move and the stock's move.
   const move = (s) => { const cut = Date.now() / 1000 - 86400, before = s.filter((p) => p[0] < cut).pop() || s[0]; return s.length > 1 ? s[s.length - 1][1] / before[1] - 1 : null; };
   const split = { coin: move(d.series.coin), stock: move(d.series.stock) };
-  const caption = t(`<b>${sym}</b> trades against <b>${stock}</b>. Its pool holds ${num(d.pool.shares)} shares, worth ${usd(d.pool.stockUsd)}.`, `<b>${sym}</b> 与 <b>${stock}</b> 配对交易。它的池子里有 ${num(d.pool.shares)} 股，价值 ${usd(d.pool.stockUsd)}。`);
-  const out = [`<b>${sym}</b>  ·  ${usd(d.coin.price)}` + (split.coin != null ? `  ·  ${split.coin >= 0 ? '🟢' : '🔴'} ${pct(split.coin)}` : ''), caption, '', `${t('Market cap', '市值')}  <b>${usd(d.coin.mcap)}</b>`];
-  if (d.coin.holders) out.push(`${t('Holders', '持有人')}  <b>${d.coin.holders.toLocaleString('en-US')}</b>`);
-  if (split.coin != null && split.stock != null) out.push('', `${t('The meme itself', 'Meme 本身')}  ${pct((1 + split.coin) / (1 + split.stock) - 1)}`, `${t(`The ${stock} token`, `${stock} 代币`)}  ${pct(split.stock)}`);
+  const change = split.coin != null ? `   ${split.coin >= 0 ? '🟢' : '🔴'} ${pct(split.coin)} ${t('in 24h', '24 小时')}` : '';
+  const sep = t(':  ', '：');
+  const facts = [`${t('Price', '价格')}${sep}<b>${usd(d.coin.price)}</b>${change}`, `${t('Market cap', '市值')}${sep}<b>${usd(d.coin.mcap)}</b>`];
+  if (d.coin.holders) facts.push(`${t('Holders', '持有人')}${sep}<b>${d.coin.holders.toLocaleString('en-US')}</b>`);
+  // The last day's move, split into the meme's own part and the stock's part.
+  const moves = split.coin != null && split.stock != null
+    ? ['', `<b>${t('Why the price moved, last 24h', '过去 24 小时价格为什么变')}</b>`, `${t('The meme itself', 'Meme 本身')}${sep}${pct((1 + split.coin) / (1 + split.stock) - 1)}`, `${t(`The ${stock} token`, `${stock} 代币`)}${sep}${pct(split.stock)}`]
+    : [];
+  const caption = stack(
+    `<b>${sym}</b>  ·  ${t('trades against', '配对')} <b>${stock}</b>`, '',
+    t(`Its pool holds <b>${num(d.pool.shares)} shares</b>, worth <b>${usd(d.pool.stockUsd)}</b>.`, `它的池子里有 <b>${num(d.pool.shares)} 股</b>，价值 <b>${usd(d.pool.stockUsd)}</b>。`), '',
+    ...facts, ...moves, '',
+    `${t('Contract', '合约')}${t(':', '：')}`, `<code>${r.address}</code>`, '',
+    `<i>${t('Price check shows what a sale or a buy would give right now.', '「查价」会显示现在卖出或买入能换到多少。')}</i>`);
 
   // The coin's own links, as its team set them, then where to look it up and where to go next.
   const own = d.coin.links || {}, social = [];
@@ -248,7 +277,7 @@ async function coin(ctx, q) {
   if (social.length) keys.push(social);
   keys.push([link('BscScan ↗', 'https://bscscan.com/token/' + r.address), ...(site ? [link(t('Trade on Stockyard ↗', '去 Stockyard 交易 ↗'), `${site}/coin.html?a=${r.address}`)] : own.dex ? [link('DexScreener ↗', own.dex)] : [])]);
   keys.push([btn(t('‹ League', '‹ 排行榜'), 'l:'), btn(t('🏠 Home', '🏠 首页'), 'h')]);
-  return screen(ctx, { png: await coinImage(d, split, zh).catch(() => null), caption, text: out.join('\n'), keys });
+  return screen(ctx, { png: await coinImage(d, split, zh).catch(() => null), caption, keys });
 }
 
 // Pick a size, then see what that trade would give. Nothing is bought or sold from the chat.
@@ -257,8 +286,8 @@ async function checkMenu(ctx, q) {
   if (!found) return noCoin(ctx, q);
   const r = found.row, a = r.address, stock = esc(nameOf(r, zh)), sym = esc(r.coin);
   return say(ctx, zh
-    ? `💱 <b>查价 · ${sym}</b>\n看看现在交易能换到多少，价格来自币安的实时报价。这里不会买入或卖出任何东西。\n\n<b>卖出</b>：把 ${sym} 换成 ${stock} 股票，或者换成现金。\n<b>买入</b>：用 ${stock} 股票支付。`
-    : `💱 <b>Price check · ${sym}</b>\nSee what a trade would give you right now, priced live by Binance. Nothing is bought or sold here.\n\n<b>Sell</b>: ${sym} into ${stock} shares, or into cash.\n<b>Buy</b>: pay with ${stock} shares.`, [
+    ? stack(`💱 <b>查价 · ${sym}</b>`, '', '看看现在交易能换到多少，价格来自币安聚合器的实时报价。', '', `<b>卖出</b>  ·  把 ${sym} 换成 ${stock} 股票，或换成现金`, `<b>买入</b>  ·  用 ${stock} 股票支付`, '', '在下面选一个金额。', '<i>这个聊天里不会买入或卖出任何东西。</i>')
+    : stack(`💱 <b>Price check · ${sym}</b>`, '', 'See what a trade would give you right now, priced live by Binance\'s aggregator.', '', `<b>Sell</b>  ·  ${sym} into ${stock} shares, or into cash`, `<b>Buy</b>  ·  pay with ${stock} shares`, '', 'Pick a size below.', '<i>Nothing is bought or sold in this chat.</i>'), [
     [10, 100, 1000].map((v) => btn((zh ? '卖出 ' : 'Sell ') + (v === 1000 ? '$1K' : '$' + v), `s:${a}:${v}`)),
     [10, 100, 1000].map((v) => btn((zh ? '买入 ' : 'Buy ') + (v === 1000 ? '$1K' : '$' + v), `b:${a}:${v}`)),
     [btn('‹ ' + r.coin, 'c:' + a)],
@@ -280,18 +309,18 @@ async function check(ctx, side, q, dollars) {
     amount = plain(Number((dollars / r.price).toPrecision(2)));
     const [keep, cash] = await Promise.all([quote(r.address, r.stock, units(amount, dec)), quote(r.address, USDT, units(amount, dec))]);
     const coins = Number(amount).toLocaleString('en-US');
-    out.push(`💱 <b>${t(`Selling ${coins} ${sym}`, `卖出 ${coins} ${sym}`)}</b> (${t('about ', '约 ')}${usd(Number(amount) * r.price)})`, '');
+    out.push(`💱 <b>${t(`Selling ${coins} ${sym}`, `卖出 ${coins} ${sym}`)}</b>`, `${t('About', '约')} ${usd(Number(amount) * r.price)}`, '');
     const sh = keep.error ? 0 : Number(keep.toAmount) / 1e18;
-    out.push(`<b>${t('Keep the stock', '留下股票')}</b>`, keep.error ? esc(keep.error) : t(`${num(sh)} ${stock} shares, worth about ${usd(sh * price)} · ${swaps(keep)}`, `${num(sh)} 股 ${stock}，约值 ${usd(sh * price)} · ${swaps(keep)}`), '');
-    out.push(`<b>${t('Take cash', '换成现金')}</b>`, cash.error ? esc(cash.error) : t(`${usd(Number(cash.toAmount) / 1e18)} in USDT · ${swaps(cash)}`, `${usd(Number(cash.toAmount) / 1e18)}（USDT）· ${swaps(cash)}`));
+    out.push(`🟡 <b>${t('Keep the stock', '留下股票')}</b>`, ...(keep.error ? [esc(keep.error)] : [t(`${num(sh)} ${stock} shares`, `${num(sh)} 股 ${stock}`), `${t('Worth about', '约值')} ${usd(sh * price)}  ·  ${swaps(keep)}`]), '');
+    out.push(`💵 <b>${t('Take cash', '换成现金')}</b>`, cash.error ? esc(cash.error) : `${usd(Number(cash.toAmount) / 1e18)} ${t('in USDT', 'USDT')}  ·  ${swaps(cash)}`);
   } else {
     amount = plain(Number((dollars / price).toPrecision(2)));
     const spend = Number(amount) * price;
     const [paid, cash] = await Promise.all([quote(r.stock, r.address, units(amount)), quote(USDT, r.address, units(spend.toFixed(6)))]);
     const coins = (x) => num(Number(x.toAmount) / 10 ** dec) + ' ' + sym;
-    out.push(`💱 <b>${t(`Buying ${sym} with ${amount} ${stock} shares`, `用 ${amount} 股 ${stock} 买入 ${sym}`)}</b> (${t('about ', '约 ')}${usd(spend)})`, '');
-    out.push(`<b>${t('Pay with the stock', '用股票支付')}</b>`, paid.error ? esc(paid.error) : `${coins(paid)} · ${swaps(paid)}`, '');
-    out.push(`<b>${t('Pay with cash', '用现金支付')}</b> ${t('(the same dollars in USDT)', '（等值的 USDT）')}`, cash.error ? esc(cash.error) : `${coins(cash)} · ${swaps(cash)}`);
+    out.push(`💱 <b>${t(`Buying ${sym} with ${amount} ${stock} shares`, `用 ${amount} 股 ${stock} 买入 ${sym}`)}</b>`, `${t('About', '约')} ${usd(spend)}`, '');
+    out.push(`🟡 <b>${t('Pay with the stock', '用股票支付')}</b>`, paid.error ? esc(paid.error) : `${coins(paid)}  ·  ${swaps(paid)}`, '');
+    out.push(`💵 <b>${t('Pay with cash', '用现金支付')}</b>`, t('The same dollars in USDT', '等值的 USDT'), cash.error ? esc(cash.error) : `${coins(cash)}  ·  ${swaps(cash)}`);
   }
   out.push('', `<i>${t('A live price from Binance, not a trade. To trade, open the coin page and sign with your own wallet.', '这是币安的实时报价，不是交易。要交易，请打开币页面，用自己的钱包签名。')}</i>`);
   const keys = [[btn(t('‹ Price check', '‹ 查价'), 'q:' + r.address), btn('‹ ' + r.coin, 'c:' + r.address)]];
@@ -303,12 +332,16 @@ function alerts(ctx) {
   const { c } = ctx, zh = c.lang === 'zh';
   if (c.wallet) {
     delete c.expect;
-    return say(ctx, zh ? `🔔 <b>发薪提醒已开启</b>\n<code>${c.wallet}</code> 每次收到股票分红，我都会把最新工资条发给你。` : `🔔 <b>Payday alerts are on</b>\nEach time <code>${c.wallet}</code> is paid in stock, I will send you its updated payslip.`, [
+    return say(ctx, zh
+      ? stack('🔔 <b>发薪提醒已开启</b>', '', '正在关注：', `<code>${c.wallet}</code>`, '', '这个钱包每次收到股票分红，我都会把最新的工资条发给你。')
+      : stack('🔔 <b>Payday alerts are on</b>', '', 'Watching:', `<code>${c.wallet}</code>`, '', 'Each time this wallet is paid in stock, I will send you its updated payslip.'), [
       [btn(zh ? '🔕 关闭' : '🔕 Turn off', 'u:'), btn(zh ? '换一个钱包' : 'Change wallet', 'aw')], [btn(zh ? '‹ 首页' : '‹ Home', 'h')],
     ]);
   }
   c.expect = 'watch';
-  return say(ctx, zh ? '🔔 <b>发薪提醒</b>\n钱包一收到股票分红，马上把最新工资条发给你。把钱包地址（0x…）发给我就能开启。' : '🔔 <b>Payday alerts</b>\nGet the updated payslip the moment a wallet is paid in stock. Send me the wallet address (0x…) to turn it on.', [[btn(zh ? '‹ 首页' : '‹ Home', 'h')]]);
+  return say(ctx, zh
+    ? stack('🔔 <b>发薪提醒</b>', '', '钱包一收到股票分红，我就把最新的工资条发给你。', '', '把钱包地址发给我就能开启。', '<i>地址以 0x 开头，共 42 个字符。</i>')
+    : stack('🔔 <b>Payday alerts</b>', '', 'Get a message, with the updated payslip, the moment a wallet is paid in stock.', '', 'Send me the wallet address to turn it on.', '<i>It starts with 0x and is 42 characters long.</i>'), [[btn(zh ? '‹ 首页' : '‹ Home', 'h')]]);
 }
 
 async function watch(ctx, wallet) {
@@ -320,15 +353,22 @@ async function watch(ctx, wallet) {
   c.wallet = d.wallet; c.seen = Math.max(Date.now(), ...d.recent.map((p) => p.time));
   save();
   const last = d.recent[0];
-  const tail = last ? (zh ? `上一次是 ${day(last.time, zh)}：+${num(last.shares)} 股 ${esc(nameOf(last, zh))}。` : `The last one was on ${day(last.time, zh)}: +${num(last.shares)} ${esc(last.name)} shares.`) : (zh ? '这个钱包还没有收到过分红。' : 'This wallet has not been paid yet.');
-  return send(ctx.chat, (zh ? `🔔 <b>已开启</b>\n<code>${d.wallet}</code> 每次收到股票分红，我都会告诉你。\n${tail}` : `🔔 <b>Alerts are on</b>\nI will tell you each time <code>${d.wallet}</code> is paid in stock.\n${tail}`), [[btn(zh ? '🧾 打印工资条' : '🧾 Print its payslip', 'p:' + d.wallet), btn(zh ? '🏠 首页' : '🏠 Home', 'hn')]]);
+  const tail = last
+    ? (zh ? `上一次发放：${day(last.time, zh)}，+${num(last.shares)} 股 ${esc(nameOf(last, zh))}。` : `Last payout: ${day(last.time, zh)}, +${num(last.shares)} ${esc(last.name)} shares.`)
+    : (zh ? '这个钱包还没有收到过分红。' : 'This wallet has not been paid yet.');
+  return send(ctx.chat, zh
+    ? stack('🔔 <b>提醒已开启</b>', '', '正在关注：', `<code>${d.wallet}</code>`, '', '这个钱包每次收到股票分红，我都会发消息给你。', '', tail)
+    : stack('🔔 <b>Alerts are on</b>', '', 'Watching:', `<code>${d.wallet}</code>`, '', 'I will message you each time this wallet is paid in stock.', '', tail),
+  [[btn(zh ? '🧾 打印工资条' : '🧾 Print its payslip', 'p:' + d.wallet), btn(zh ? '🏠 首页' : '🏠 Home', 'hn')]]);
 }
 
 function unwatch(ctx) {
   const zh = ctx.c.lang === 'zh';
   delete ctx.c.wallet; delete ctx.c.seen; delete ctx.c.expect;
   save();
-  return send(ctx.chat, zh ? '🔕 <b>发薪提醒已关闭。</b>' : '🔕 <b>Payday alerts are off.</b>', [[btn(zh ? '🏠 首页' : '🏠 Home', 'hn')]]);
+  return send(ctx.chat, zh
+    ? stack('🔕 <b>发薪提醒已关闭</b>', '', '我不会再给你发发薪消息。随时可以在首页重新开启。')
+    : stack('🔕 <b>Payday alerts are off</b>', '', 'I will not message you about payouts any more. You can turn them back on from Home.'), [[btn(zh ? '🏠 首页' : '🏠 Home', 'hn')]]);
 }
 
 // No more than twelve requests a minute from one chat, so one user cannot use up the Binance quota.
@@ -394,13 +434,13 @@ async function onUpdate(u) {
   // msg is the message whose button was tapped; photo says whether it is a picture or plain text.
   const ctx = { chat, c, msg: cb?.message?.message_id ?? null, photo: Boolean(cb?.message?.photo) };
   if (cb) tg('answerCallbackQuery', { callback_query_id: cb.id }).catch(() => {});
-  if (tooFast(chat)) return recent.get(chat).length === 13 ? send(chat, esc(c.lang === 'zh' ? '太快了，请等一分钟。' : 'Too fast. Give it a minute.')) : null;
+  if (tooFast(chat)) return recent.get(chat).length === 13 ? send(chat, c.lang === 'zh' ? stack('⏳ <b>太快了</b>', '', '请等一分钟再继续。') : stack('⏳ <b>Too fast</b>', '', 'Give it a minute, then carry on.')) : null;
   try {
     if (msg?.text) await onText(ctx, msg.text);
     else if (cb?.data) await onTap(ctx, cb.data);
   } catch (err) {
     console.log('telegram:', err.message);
-    await send(chat, esc((c.lang === 'zh' ? '出错了：' : 'That did not work: ') + err.message), [[btn(c.lang === 'zh' ? '🏠 首页' : '🏠 Home', 'hn')]]).catch(() => {});
+    await send(chat, stack(c.lang === 'zh' ? '⚠️ <b>出错了</b>' : '⚠️ <b>That did not work</b>', '', esc(err.message), '', c.lang === 'zh' ? '请再试一次，或回到首页。' : 'Try again, or go back Home.'), [[btn(c.lang === 'zh' ? '🏠 首页' : '🏠 Home', 'hn')]]).catch(() => {});
   }
 }
 
@@ -413,7 +453,7 @@ async function payday() {
       const fresh = d.recent.filter((p) => p.time > (c.seen || 0)).sort((a, b) => a.time - b.time);
       if (fresh.length) {
         const lines = fresh.slice(-3).map((p) => (zh ? `<b>+${num(p.shares)} 股 ${esc(nameOf(p, zh))}</b>（${usd(p.value)}）` : `<b>+${num(p.shares)} ${esc(p.name)} shares</b> (${usd(p.value)})`));
-        const text = `🐂 <b>${zh ? '发薪了！' : '发薪了 · Payday!'}</b>\n${lines.join('\n')}\n` + (zh ? `刚刚打进 ${short(d.wallet)}。` : `just landed in ${short(d.wallet)}.`);
+        const text = stack(`🐂 <b>${zh ? '发薪了！' : '发薪了 · Payday!'}</b>`, '', ...lines, '', zh ? `刚刚打进 ${short(d.wallet)}。` : `Just landed in ${short(d.wallet)}.`);
         const keys = [[link(zh ? '查看交易 ↗' : 'View the transaction ↗', 'https://bscscan.com/tx/' + fresh[fresh.length - 1].hash)], [btn(zh ? '🏠 首页' : '🏠 Home', 'hn')]];
         // The alert carries the updated payslip when it can be drawn.
         const png = await slipImage(d, zh).catch(() => null);

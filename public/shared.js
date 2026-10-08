@@ -107,7 +107,8 @@ function socials(links, small) {
 }
 
 // Every stock-paired pool that holds stock, read from the chain by our own server.
-const loadLeague = () => getJson('/api/league');
+// The listed coins by default; every pool only when asked, because that answer is a hundred times larger.
+const loadLeague = (all) => getJson('/api/league' + (all ? '' : '?scope=listed'));
 
 // The server's "Binance is unreachable" error, in the reader's language. Other errors pass through.
 const offlineError = (e) => /cannot be reached|did not answer/.test(e || '');
