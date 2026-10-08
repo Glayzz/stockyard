@@ -345,11 +345,15 @@ const trade = tradeFlow($('trade'), () => {
   const coins = { symbol: coin.symbol, decimals: dec, text: (n) => full(n) + ' ' + coin.symbol, usd: coin.price };
   const shares = { symbol: name, decimals: 18, text: (n) => (zh ? `${num(n)} 股 ${name}` : `${num(n)} ${stock.name} shares`), usd: stock.price || 0 };
   const typed = Number(S.quotes.amount) / 10 ** (S.quotes.side === 'buy' ? 18 : dec);
+  // Opened from this address, the page comes back on the same coin, side and amount.
+  const link = `${location.origin}${location.pathname}?a=${addr}&side=${S.quotes.side}&amount=${encodeURIComponent($('amount').value.trim())}`;
   if (S.quotes.side === 'buy') return {
+    link,
     from: stock.address, to: addr, amount: S.quotes.amount, slippage: 3 + (S.buyTax || 0) * 100, spend: shares, receive: coins,
     action: zh ? `用 ${shares.text(typed)} 买入 ${coin.symbol}` : `Buy ${coin.symbol} with ${shares.text(typed)}`,
   };
   return {
+    link,
     from: addr, to: stock.address, amount: S.quotes.amount, slippage: 3 + (S.sellTax || 0) * 100, spend: coins, receive: shares,
     action: zh ? `卖出 ${coins.text(typed)}，留下股票` : `Sell ${coins.text(typed)}, keep the stock`,
   };

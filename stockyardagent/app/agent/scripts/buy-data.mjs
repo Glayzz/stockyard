@@ -101,8 +101,15 @@ try {
   held = await balances();
   stop(`Agent wallet: ${held.bnb.toFixed(6)} BNB, ${held.u.toFixed(4)} U.`);
 }
-console.log(`Answer: HTTP ${result.statusCode}. Paid ${result.paidUsd ?? 0} ${result.symbol ?? 'U'}.`);
-if (result.settlement?.transaction) console.log('Payment settled: https://bscscan.com/tx/' + result.settlement.transaction);
-console.log(JSON.stringify(result.json ?? {}).slice(0, 400) + ' …');
+if (result.statusCode !== 200 || !result.settlement?.transaction) {
+  // The signed payment was offered but never settled, so no money moved. The balance below shows it.
+  const why = await fetch(origin + '/x402/last').then((r) => r.json()).catch(() => null);
+  console.log(`The seller answered HTTP ${result.statusCode} and the payment was not settled. Nothing was paid.`);
+  console.log('What the seller said:', result.json?.error ?? (why?.reason ? `${why.step} - ${why.reason}${why.message ? ': ' + why.message : ''}` : 'no reason given'));
+} else {
+  console.log(`Answer: HTTP ${result.statusCode}. Paid ${result.paidUsd ?? 0} ${result.symbol ?? 'U'}.`);
+  console.log('Payment settled: https://bscscan.com/tx/' + result.settlement.transaction);
+  console.log(JSON.stringify(result.json ?? {}).slice(0, 400) + ' …');
+}
 held = await balances();
 console.log(`Agent wallet now: ${held.bnb.toFixed(6)} BNB, ${held.u.toFixed(4)} U.`);

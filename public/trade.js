@@ -4,7 +4,7 @@
 // anything is signed, and the user only hears about that check if it fails.
 //
 // job() describes the swap, or returns null while there is none:
-//   { from, to, amount, slippage, owner?, action,
+//   { from, to, amount, slippage, owner?, action, link?,     link: an address that reopens this trade
 //     spend:   { symbol, decimals, text(n) },      what leaves the wallet
 //     receive: { decimals, text(n), usd } }        what arrives, and its dollar price per unit
 let WALLET = null;
@@ -55,7 +55,7 @@ function tradeFlow(box, job) {
     if (stage) { steps(stage.step, stage.two); say(stage.text); return; }
     if (note) say(note.text, note.bad ? 'down' : null);
     if (!j) return;
-    if (!window.ethereum) { say(t('To trade, open this page in a browser with a BNB Chain wallet such as MetaMask or Binance Wallet.', '要交易，请在装有 BNB Chain 钱包（如 MetaMask 或币安钱包）的浏览器中打开本页。')); return; }
+    if (!window.ethereum) { noWallet(j); return; }
     if (!WALLET) { button(t('Connect wallet', '连接钱包'), connect); return; }
     if (j.owner && j.owner.toLowerCase() !== WALLET.toLowerCase()) {
       say(zh ? `已连接的钱包 ${short(WALLET)} 不是这张工资条上的钱包。请在钱包里切换到 ${short(j.owner)}。` : `The connected wallet ${short(WALLET)} is not the one on this payslip. Switch to ${short(j.owner)} in your wallet.`, 'down');
@@ -67,6 +67,29 @@ function tradeFlow(box, job) {
     else say(t('Wallet ', '钱包 ') + short(WALLET) + (ready ? ' · ' + (ready.wallet.needsApproval ? t('you will confirm twice: once to allow the token, once to swap', '需要在钱包里确认两次：先授权，再兑换') : t('you will confirm once in your wallet', '只需在钱包里确认一次')) : ''));
     // Get the trade ready before the click, so the click goes straight to the wallet.
     if (!ready) prepare(j).then(() => { if (!stage) render(); }, () => {});
+  }
+
+  // A phone's own browser has no wallet in it. These links reopen this page inside a wallet app's
+  // browser, where the Connect button shows. The Binance link is built the way Binance's own
+  // @binance/w3w-utils builds it.
+  function noWallet(j) {
+    if (!/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+      say(t('To trade, open this page in a browser with a BNB Chain wallet such as Binance Wallet or MetaMask.', '要交易，请在装有 BNB Chain 钱包（如币安钱包或 MetaMask）的浏览器中打开本页。'));
+      return;
+    }
+    const url = j.link || location.href;
+    const binance = 'bnc://app.binance.com/mp/app?appId=yFK5FCqYprrXDiVFbhyRx7&startPagePath=' + btoa('/pages/browser/index') + '&startPageQuery=' + btoa('url=' + url + '&defaultChainId=56');
+    const apps = [
+      [t('Binance Wallet', '币安钱包'), 'https://app.binance.com/en/download?_dp=' + btoa(binance)],
+      ['MetaMask', 'https://metamask.app.link/dapp/' + url.replace(/^https?:\/\//, '')],
+      ['Trust Wallet', 'https://link.trustwallet.com/open_url?coin_id=20000714&url=' + encodeURIComponent(url)],
+      ['OKX Wallet', 'https://www.okx.com/download?deeplink=' + encodeURIComponent('okx://wallet/dapp/url?dappUrl=' + encodeURIComponent(url))],
+    ];
+    say(t('To trade on your phone, open this page inside your wallet app:', '在手机上交易，请在钱包 App 里打开本页：'));
+    const row = el('div', 'wallets');
+    apps.forEach(([name, href], i) => { const a = el('a', 'btn' + (i ? ' plain' : ''), name); a.href = href; a.rel = 'noopener'; row.append(a); });
+    box.append(row);
+    say(t('It opens there with this trade filled in and a Connect wallet button.', '打开后这笔交易已填好，并会出现「连接钱包」按钮。'));
   }
 
   async function connect() {

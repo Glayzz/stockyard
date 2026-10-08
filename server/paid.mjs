@@ -36,6 +36,9 @@ const PRODUCTS = {
 };
 
 const b402 = (operation, body) => bw3('/api/v2/b402/' + operation, { method: 'POST', body: { body } });
+// The same call for the two steps that carry a payment. If Binance cannot be asked at all, the
+// reason is kept and nothing is charged.
+const unreachable = (err) => ({ unreachable: String(err.message).replace(/<[^>]*>?/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 140) });
 const units = (amount, decimals = 18) => {
   const [whole, frac = ''] = String(amount).split('.');
   return (BigInt(whole || '0') * 10n ** BigInt(decimals) + BigInt((frac + '0'.repeat(decimals)).slice(0, decimals) || '0')).toString();
@@ -108,7 +111,8 @@ export async function paid(req, url) {
   if (again && Date.now() - again.at < 600000) return json(200, again.body, { 'PAYMENT-RESPONSE': b64(again.receipt) });
 
   const paymentPayload = { ...payment, resource };
-  const check = await b402('verify', { x402Version: 2, paymentPayload, paymentRequirements: terms });
+  const check = await b402('verify', { x402Version: 2, paymentPayload, paymentRequirements: terms }).catch(unreachable);
+  if (check?.unreachable) { turnedDown('verify', 'b402_unreachable', { message: check.unreachable }); return json(502, { error: 'Binance B402 could not check this payment, so nothing was charged: ' + check.unreachable }); }
   if (!check?.isValid) { turnedDown('verify', check?.invalidReason || 'unknown', { message: check?.invalidMessage || null }); return challenge(check?.invalidReason || 'The payment could not be verified'); }
 
   // Do the work before taking the money, so a failed answer is never charged.
@@ -121,7 +125,8 @@ export async function paid(req, url) {
     info: { input: { type: 'http', method: 'GET', queryParams: query } },
     schema: { $schema: 'https://json-schema.org/draft/2020-12/schema', type: 'object', properties: { input: { type: 'object', properties: { type: { const: 'http' }, method: { enum: ['GET'] } }, required: ['type', 'method'] } }, required: ['input'] },
   };
-  const done = await b402('settle', { x402Version: 2, paymentPayload: { ...paymentPayload, extensions: { ...payment.extensions, bazaar } }, paymentRequirements: terms });
+  const done = await b402('settle', { x402Version: 2, paymentPayload: { ...paymentPayload, extensions: { ...payment.extensions, bazaar } }, paymentRequirements: terms }).catch(unreachable);
+  if (done?.unreachable) { turnedDown('settle', 'b402_unreachable', { message: done.unreachable }); return json(502, { error: 'Binance B402 did not answer the settle call. Check the payer wallet before trying again: ' + done.unreachable }); }
   if (!done?.success) { turnedDown('settle', done?.errorReason || 'unknown', { message: done?.errorMessage || null, transaction: done?.transaction || null }); return challenge(done?.errorReason || 'The payment could not be settled'); }
 
   const receipt = { success: true, transaction: done.transaction, network: done.network || NETWORK, payer: done.payer };
