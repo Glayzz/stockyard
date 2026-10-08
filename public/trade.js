@@ -70,8 +70,8 @@ function tradeFlow(box, job) {
   }
 
   // A phone's own browser has no wallet in it. These links reopen this page inside a wallet app's
-  // browser, where the Connect button shows. The Binance link is built the way Binance's own
-  // @binance/w3w-utils builds it.
+  // browser, where the Connect button shows. Each follows that wallet's own documented link; the
+  // Binance one is built the way @binance/w3w-utils builds it. Any other wallet: copy the link.
   function noWallet(j) {
     if (!/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
       say(t('To trade, open this page in a browser with a BNB Chain wallet such as Binance Wallet or MetaMask.', '要交易，请在装有 BNB Chain 钱包（如币安钱包或 MetaMask）的浏览器中打开本页。'));
@@ -84,12 +84,25 @@ function tradeFlow(box, job) {
       ['MetaMask', 'https://metamask.app.link/dapp/' + url.replace(/^https?:\/\//, '')],
       ['Trust Wallet', 'https://link.trustwallet.com/open_url?coin_id=20000714&url=' + encodeURIComponent(url)],
       ['OKX Wallet', 'https://www.okx.com/download?deeplink=' + encodeURIComponent('okx://wallet/dapp/url?dappUrl=' + encodeURIComponent(url))],
+      ['Bitget Wallet', 'https://bkcode.vip?action=dapp&url=' + encodeURIComponent(url)],
+      ['TokenPocket', 'tpdapp://open?params=' + encodeURIComponent(JSON.stringify({ url, chain: 'BSC', source: 'Stockyard' }))],
+      ['Coinbase Wallet', 'https://go.cb-w.com/dapp?cb_url=' + encodeURIComponent(url)],
     ];
     say(t('To trade on your phone, open this page inside your wallet app:', '在手机上交易，请在钱包 App 里打开本页：'));
     const row = el('div', 'wallets');
     apps.forEach(([name, href], i) => { const a = el('a', 'btn' + (i ? ' plain' : ''), name); a.href = href; a.rel = 'noopener'; row.append(a); });
-    box.append(row);
-    say(t('It opens there with this trade filled in and a Connect wallet button.', '打开后这笔交易已填好，并会出现「连接钱包」按钮。'));
+    const other = el('button', 'btn plain', t('Other · copy link', '其他 · 复制链接'));
+    other.type = 'button';
+    // If the browser will not copy, the link is shown instead, selected and ready to copy by hand.
+    const shown = el('input', 'linkfield');
+    shown.readOnly = true; shown.value = url; shown.hidden = true;
+    other.onclick = async () => {
+      if (await copyText(url)) { other.textContent = t('Copied', '已复制'); setTimeout(() => { other.textContent = t('Other · copy link', '其他 · 复制链接'); }, 1500); }
+      else { shown.hidden = false; shown.focus(); shown.select(); }
+    };
+    row.append(other);
+    box.append(row, shown);
+    say(t('It opens there with this trade filled in and a Connect wallet button. With any other wallet, copy the link and paste it into the wallet\'s own browser.', '打开后这笔交易已填好，并会出现「连接钱包」按钮。其他钱包：复制链接，粘贴到钱包自带的浏览器里。'));
   }
 
   async function connect() {

@@ -57,22 +57,27 @@ function avatar(url, label) {
 }
 
 // An address shown short. A click copies the whole thing.
+// Puts text on the clipboard and says whether it worked.
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; }
+  catch {
+    // Older browsers and pages without clipboard permission: copy through a hidden field.
+    const field = el('textarea');
+    field.value = text; field.style.position = 'fixed'; field.style.opacity = '0';
+    document.body.append(field); field.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch {}
+    field.remove();
+    return ok;
+  }
+}
+
 function copyable(address) {
   const b = el('button', 'copy', short(address));
   b.type = 'button'; b.title = t('Copy ', '复制 ') + address;
   b.onclick = async (e) => {
     e.stopPropagation(); e.preventDefault();
-    try { await navigator.clipboard.writeText(address); }
-    catch {
-      // Older browsers and pages without clipboard permission: copy through a hidden field.
-      const field = el('textarea');
-      field.value = address; field.style.position = 'fixed'; field.style.opacity = '0';
-      document.body.append(field); field.select();
-      let ok = false;
-      try { ok = document.execCommand('copy'); } catch {}
-      field.remove();
-      if (!ok) return;
-    }
+    if (!await copyText(address)) return;
     b.textContent = t('Copied', '已复制'); b.classList.add('done');
     setTimeout(() => { b.textContent = short(address); b.classList.remove('done'); }, 1200);
   };
