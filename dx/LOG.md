@@ -113,3 +113,15 @@
 - The RWA Data API shows the same ratio from the other side: for SPYB it returned tokenPrice 773.32 and a reference price of 771.98, which is also 1.00173. So one SPYB token stands for about 1.00173 shares, the wallet tools count in shares and the chain counts in tokens. Nothing in the trading or wallet docs I read says which unit a quantity is in.
 - In the same swap the route delivered 0.000937250 SPYB and 0.000004686 of it (0.5%) went to another address before the wallet got its part: the Binance Wallet trading fee, taken in the token bought.
 - The docs index lists a rate-limits guide, so the 429 I hit on B402 verify was a documented kind of limit; I had not read that page.
+
+## 8 Oct 2026, 23:11 UTC (after the US close) · bStocks against Ondo, measured
+
+- USDT into each stock token through GET /api/v1/dex/aggregator/quote, at $100, $1,000, $10,000 and $50,000.
+  - bStocks (SPYB, QQQB, NVDAB, TSLAB, AAPLB): every size quoted, price impact at most 0.16%, cost 0.03% to 0.21% above the token price. I did not find the size where they give out.
+  - Ondo, with userWalletAddress set: SPYon 10.43% impact at $100, 89.67% at $1,000, 98.96% at $10,000. NVDAon 0.01% at $100, 1.58% at $1,000, 79.41% at $10,000. TSLAon fine at $100, then "code 40374: Insufficient liquidity for a quote. Please decrease the transaction amount or try again later." from $1,000 up.
+- Ondo quotes need a wallet address and bStock quotes do not: without one, "code 40001: userWalletAddress is required for RFQ (Ondo) quote".
+- A meme coin cannot be quoted into an Ondo stock at all: "code 40368: Ondo asset on chain 56 can only pair with allowed stablecoin(s)". The pools exist on PancakeSwap (FXIon sits in 229 meme pools holding $680K), but the aggregator will not route them. NIUMA into SPYB, a bStock, routes in one hop. My coin page now says this in plain words instead of showing the code.
+- rwa/price, token price over reference price: SPYB 1.001730 (the same at 11:20 UTC and at 23:11 UTC), QQQB 1.000725, NVDAB 1.000778, AAPLB 1.000604, TSLAB 1.000000; SPYon 1.009473, QQQon 1.004082, AAPLon 1.003376, NVDAon 1.001715, TSLAon 1.000000. Tesla pays no dividend and is exactly 1 on both platforms, so the ratio is each token's share multiplier, not a market gap, and it did not move after hours.
+- The same ticker is a different token price on each platform: SPYB 775.34 against SPYon 781.92 at the same moment, and their reference prices differ too (774.00 against 774.59).
+- rwa/underlying-market for SPYB after the close: openState true, reasonCode "TRADING", nextOpenTime and nextCloseTime null. The API gave no sign the underlying market was shut, so my page works out US market hours itself.
+- Stock sitting in meme pools, from the chain scan: QQQB $4.70M in 1,169 pools, SPCXB $3.17M in 405, BNCB $1.25M in 366, NVDAB $1.18M in 340, AAPLB $0.85M in 101, SPYB $0.85M in 262, GMEB $0.82M in 210, FXIon $0.68M in 229.

@@ -116,7 +116,14 @@ const loadLeague = (all) => getJson('/api/league' + (all ? '' : '?scope=listed')
 
 // The server's "Binance is unreachable" error, in the reader's language. Other errors pass through.
 const offlineError = (e) => /cannot be reached|did not answer/.test(e || '');
-const why = (e) => (offlineError(e) ? t('Binance cannot be reached right now', '暂时连不上币安') : e);
+// Binance's own reasons for refusing a quote, in plain words. Anything else is shown as it came.
+const why = (e) => {
+  if (offlineError(e)) return t('Binance cannot be reached right now', '暂时连不上币安');
+  if (/40368|40001|RFQ (Ondo)|allowed stablecoin/.test(e || '')) return t('Binance only trades Ondo stocks against stablecoins, so this pair cannot be traded here', '币安只支持 Ondo 股票与稳定币兑换，这个交易对无法在这里交易');
+  if (/40374|Insufficient liquidity/.test(e || '')) return t('Not enough liquidity for this amount. Try a smaller one', '这个数量的流动性不足，请试试更小的数量');
+  if (/40441|No valid quote/.test(e || '')) return t('No route for this amount. It may be too small', '这个数量没有可用路线，可能太小了');
+  return e;
+};
 
 // A coin's own buy and sell tax as fractions, from GoPlus. Null when it is not known.
 async function coinTax(address) {
