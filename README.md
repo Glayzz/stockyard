@@ -21,6 +21,7 @@ worth $100K or more. Some pay their holders in stock. Until now there was no too
 | `public/agents.html` · Agents | What an agent can do with Stockyard, each item linked to its on-chain proof: the agent's identity, a settled paid call, the agent funding itself, and a live stock trade. |
 | `skills/stockyard-stock-memes` | A skill in the Binance Skills Hub format that hands execution to Binance Agentic Wallet. |
 | `mcp/server.mjs` | The same data as five MCP tools for any agent. |
+| `scripts/agentic-trade.mjs` | A Stockyard trade carried out by Binance Agentic Wallet: Stockyard names the trade and checks it (aggregator quote, balance, Transaction API), then the wallet signed in through Binance's `baw` CLI quotes it again and executes it. It previews by default and trades only with `--send`. |
 | `server/paid.mjs` · `/x402` | The same data sold to agents per call over x402, settled through Binance's B402: one cent for the league or a coin, two for a payslip. `GET /x402` is the free catalogue. Each settled call also lists the resource in B402's Bazaar. |
 | `scripts/x402-buy.mjs` | An agent paying for that data with no SDK: about 150 lines that take the 402, sign an EIP-3009 authorization and call again. The buyer needs no BNB. |
 | `stockyardagent/` | The Stockyard agent, scaffolded with BNB Agent Studio: an ERC-8004 identity on BNB Chain (agent 365431), Studio's runtime with an A2A card and an MCP endpoint, and a work hook that is fixed code, not an LLM. See its own README. |

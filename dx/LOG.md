@@ -78,3 +78,12 @@
 - The agent paid 0.01 U for https://stockyardbnb.duckdns.org/x402/league and B402 settled it: https://bscscan.com/tx/0xee59cb7866e5a705dc58c4682399441a86a0b47970784c6dfcc854410ad8ee85 (block 126496388, sent by B402's signer 0x34F7…0899, 0.01 U from the agent wallet to my receiving address). So the 403 really was the sslip.io name and nothing else: same code, same key, a different host name.
 - Two tries before it failed on my side, not Binance's: my connection's DNS gave no answer for the site's name (getaddrinfo EAI_AGAIN). The script now asks a public resolver when that happens.
 - The Telegram bot lost about one call in four to api.telegram.org from the AWS server until I found that Node gives each address of a name only 250 ms to connect (the server has no IPv6, Telegram has an IPv6 address). Not a Binance issue, but it cost an evening.
+
+## 8 Oct 2026 · Agentic Wallet
+
+- Installed the CLI with `npm install -g @binance/agentic-wallet@1.10.0` (74 packages, 14 s). `baw auth signin --json` returned a pairing code and a link (app.binance.com/uni-qr/…); scanning it in the Binance app showed the same code and my PC's IP and city, and one tap signed in. `baw wallet status` said CONNECTED straight after.
+- Finding Agentic Wallet inside the Binance app was the hard part: it is not on the Wallet home screen, and the skill docs only say "create one in the Binance App". The QR sign-in from the PC is what took me to it.
+- The wallet has one address for every EVM chain and a separate Solana one. `wallet balance` hides anything worth less than a cent, so a new wallet answers with an empty list.
+- `wallet settings` showed the defaults: $50,000 daily limit, abnormal transactions auto-rejected, tradeAllTokens false, x402 limit $20 a day, developer mode off, signed in for 48 hours.
+- `market-order quote` answered for NIUMA into SPYB, SPYB into NIUMA, USDT into SPYB and BNB into SPYB before the wallet held anything, so a quote needs no balance. Its numbers were within half a percent of the Web3 API's aggregator/quote for the same trade (0.000611 against 0.000613 SPYB for 500 NIUMA).
+- On Windows `baw` is a .cmd file, so starting it from Node needs a shell; with every argument an address, a number or a fixed word that is safe, but passing JSON (x402-payment preview) that way would not be.
