@@ -97,3 +97,12 @@
 - `tradeAllTokens` was false ("Limited Tokens" in the app) and NIUMA still traded, so either it is on the allowed list or the setting does not cover it. I could not find the list.
 - Quotes agreed closely before each trade: Stockyard's aggregator quote said 772.1 NIUMA and Agentic Wallet 768.3 (got 768.2); then 0.000946746 against 0.000943614 SPYB (got 0.000934177).
 - `wallet tx-history` returns the fee, the approval and the send/receive legs of each swap, which is everything a receipt needs.
+
+## 8 Oct 2026 · checking my notes against the docs before writing the report
+
+- Reopened the docs (VPN on) to get exact URLs. Three earlier notes hold up as documentation problems:
+  - https://web3.binance.com/en/dev-docs/catalog/web3-wallet/api/rest-api/trading-api#get-aggregated-quote--data-priceimpactpercent says "Estimated price impact percentage" with the example "-0.01". The value is a fraction: 0.0042 came back for a 0.42% impact. taxRate on the same page does say "Range 0–1".
+  - https://web3.binance.com/en/dev-docs/catalog/web3-wallet/api/rest-api/transaction-api#simulate-transactions/request-body marks evmTx, solTx and tronTx all as required, while each one's own text says it is required only for its chain. The API's error for a wrong body says "evmParams is required for EVM chains", and evmParams appears nowhere in schema.json.
+  - https://web3.binance.com/en/dev-docs/products/b402-api/error-codes lists insufficient_funds among the verify reasons without saying when each is returned; a correctly signed payment from an empty wallet got invalid_transaction_state.
+- Two earlier notes were my own mistakes, not the docs': the reference does show token/basic-info taking its parameters in the query string, and the B402 integration guide does warn that the body must be wrapped as {"body": ...}. The B402 token addresses are also listed, on the payment methods page; it is only the `supported` response that leaves them out.
+- The page that mattered most stays https://web3.binance.com/en/dev-docs/authentication.
