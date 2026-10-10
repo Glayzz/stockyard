@@ -49,7 +49,8 @@ const said = (j) => JSON.stringify(j.error ?? j).slice(0, 400);
 
 // ---- the wallet ----
 const status = baw('wallet', 'status');
-if (status.data?.status !== 'CONNECTED') stop('Agentic Wallet is not signed in on this machine. Run `baw auth signin --json`, open the link it prints, confirm in the Binance app, then `baw auth verify --qrCodeId <id> --json`.');
+if (/TIMEOUT|DNS|Host not found/i.test(JSON.stringify(status.error || ''))) stop('Binance cannot be reached from this connection. Turn the VPN on and run this again.');
+if (status.data?.status !== 'CONNECTED') stop('Agentic Wallet is not signed in on this machine. Sign in with: node scripts/agentic-signin.mjs');
 const wallet = baw('wallet', 'address').data?.addresses?.find((a) => a.binanceChainId === '56')?.address;
 if (!isAddr(wallet)) stop('Agentic Wallet gave no BNB Chain address.');
 const held = baw('wallet', 'balance', '--binanceChainId', '56').data || [];
@@ -79,6 +80,9 @@ if (amount === 'all') {
   if (from === tokens.bnb) stop('Give a BNB amount instead of "all": the wallet needs some BNB left for network fees.');
   amount = held.find((b) => String(b.address).toLowerCase() === from.address.toLowerCase())?.balance;
   if (!amount) stop(`The wallet shows no ${from.symbol} (balances under one cent are hidden). Give an amount instead.`);
+  // Binance's tools count a stock token in shares, which is a little more than the tokens the
+  // chain holds (1.0017 for SPYB). Half a percent is left behind so "all" is never more than is there.
+  if (from === tokens.stock) amount = String(Math.floor(Number(amount) * 0.995 * 1e8) / 1e8);
 }
 if (!/^\d+(\.\d+)?$/.test(amount || '') || !(Number(amount) > 0)) stop('--amount must be a number, or "all".');
 
