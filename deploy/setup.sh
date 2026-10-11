@@ -34,8 +34,12 @@ echo "== Setting up https://$STOCKYARD_HOST"
 LOG=$HOME/stockyard-setup.log
 : > "$LOG"
 apt_quiet() { sudo env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get -y -qq "$@" >>"$LOG" 2>&1 || { tail -20 "$LOG"; exit 1; }; }
-apt_quiet update
-apt_quiet install curl git ca-certificates gnupg debian-keyring debian-archive-keyring apt-transport-https
+# On a server that is already set up nothing needs installing, and a package repository that will
+# not refresh (it happens) must not stop an update of the app itself.
+if ! command -v git >/dev/null || ! command -v curl >/dev/null || ! command -v node >/dev/null || ! command -v caddy >/dev/null; then
+  apt_quiet update
+  apt_quiet install curl git ca-certificates gnupg debian-keyring debian-archive-keyring apt-transport-https
+fi
 
 if ! command -v node >/dev/null || [ "$(node -p 'process.versions.node.split(".")[0]')" -lt 22 ]; then
   curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - >>"$LOG" 2>&1
