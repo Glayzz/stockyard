@@ -14,7 +14,9 @@ const NIUMA = '0xc01a2e136f92772eecab15eb054e8f6fa06b7777', HOLDER = '0xddb90566
 const usd = (n) => (n >= 1e6 ? '$' + (n / 1e6).toFixed(2) + 'M' : n >= 1e3 ? '$' + (n / 1e3).toFixed(1) + 'K' : '$' + Number(n).toFixed(2));
 
 // ---- 1. the MCP server, over stdio, one JSON-RPC message per line ----
-const server = spawn(process.execPath, [root + 'mcp/server.mjs'], { stdio: ['pipe', 'pipe', 'inherit'] });
+// It is started with the same name lookup as this script, which asks public DNS when the local one
+// gives no answer (a mobile hotspot often does not).
+const server = spawn(process.execPath, ['--import', pathToFileURL(root + 'server/net.mjs').href, root + 'mcp/server.mjs'], { stdio: ['pipe', 'pipe', 'inherit'] });
 const waiting = new Map();
 let buffer = '', next = 1;
 server.stdout.on('data', (chunk) => {
@@ -29,7 +31,10 @@ const ask = (method, params) => new Promise((done, fail) => {
   server.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n');
   setTimeout(() => fail(new Error('the MCP server did not answer in 60 s')), 60000).unref();
 });
-const tool = async (name, args) => JSON.parse((await ask('tools/call', { name, arguments: args })).content[0].text);
+const tool = async (name, args) => {
+  const text = (await ask('tools/call', { name, arguments: args })).content[0].text;
+  try { return JSON.parse(text); } catch { throw new Error(`${name} could not reach the Stockyard site: ${text}`); }
+};
 
 console.log('Stockyard MCP server (node mcp/server.mjs)\n');
 const { tools } = await ask('tools/list', {});
