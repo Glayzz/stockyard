@@ -28,7 +28,8 @@ const { fetchWithPayment } = await import('@bnbagent/studio-runtime/x402');
 
 const arg = (name, fallback) => process.argv.find((a) => a.startsWith(`--${name}=`))?.split('=').slice(1).join('=') ?? fallback;
 const send = process.argv.includes('--send');
-const url = arg('url', 'http://localhost:4173/x402/league?stock=SPY');
+// The live site by default; --url=http://localhost:4173/x402/league?stock=SPY for a local server.
+const url = arg('url', 'https://stockyardbnb.duckdns.org/x402/league?stock=SPY');
 const topUp = arg('bnb', '0.0012');
 const origin = new URL(url).origin;
 const RPC = 'https://bsc-rpc.publicnode.com';
