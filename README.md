@@ -68,6 +68,8 @@ Built during the hackathon build window, 16 September to 11 October 2026, and li
   site, the API, the paid routes and the Telegram bot in one Node process, with Caddy in front for
   HTTPS. From there a Binance quote comes back in about 0.4 s and a full trade plan (quote,
   balance, approval, swap and the Transaction API check) in about 1.4 s.
+- Starting from BNB: the trade box also buys a coin with BNB, for a wallet that holds neither the coin
+  nor its stock yet. Then it can sell and keep the stock, and buy back with the stock.
 - Trading from a phone: the trade box opens the same coin, side and amount inside Binance Wallet,
   MetaMask, Trust Wallet, OKX or Bitget, or connects any other wallet through WalletConnect (a QR
   code on a computer). If the network blocks WalletConnect's relay, the page says so first.
@@ -97,6 +99,9 @@ node scripts/probe.mjs
 ```
 
 `GET /api/health` reports whether the server can reach Binance from where it runs.
+
+`node scripts/agent-demo.mjs` shows what an agent gets in a few seconds: it starts the MCP server,
+calls three of its tools against the live site, and has the Stockyard agent write one report.
 
 To sell data over x402, finish the B402 Payments application in the developer portal, use a key
 with the B402 Payments permission, and put the receiving address from that application in `.env`
@@ -173,5 +178,7 @@ history, stock profiles) and GoPlus (coin tax).
 ## Notes
 
 - Pool liquidity belongs to liquidity providers. It does not back a coin's price.
+- The payslip reads payout history for the stock tokens a wallet still holds. A wallet that has moved
+  all of a stock out, as NIUMA's treasury did on 10 Oct 2026, shows none of that stock's past payouts.
 - Nothing here is financial advice.
 - `dx/LOG.md` is the running log behind the Developer Experience Report.

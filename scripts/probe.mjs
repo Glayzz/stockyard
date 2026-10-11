@@ -8,7 +8,7 @@ process.loadEnvFile(fileURLToPath(new URL('../.env', import.meta.url)));
 const NIUMA = '0xc01a2E136F92772EeCAB15EB054E8f6FA06b7777';
 const SPYB = '0x7138b48df7D98D7e3cc221BfE7192D0a178182D8';
 const USDT = '0x55d398326f99059fF775485246999027B3197955';
-const WALLET = '0xe1B0e19F8e014e760BFa6F81769Fd3587CF9d767';
+const WALLET = '0x28816c4c4792467390c90e5b426f198570e29307';
 const chain = { binanceChainId: '56' };
 const amount = '100000' + '0'.repeat(18);
 

@@ -125,3 +125,9 @@
 - The same ticker is a different token price on each platform: SPYB 775.34 against SPYon 781.92 at the same moment, and their reference prices differ too (774.00 against 774.59).
 - rwa/underlying-market for SPYB after the close: openState true, reasonCode "TRADING", nextOpenTime and nextCloseTime null. The API gave no sign the underlying market was shut, so my page works out US market hours itself.
 - Stock sitting in meme pools, from the chain scan: QQQB $4.70M in 1,169 pools, SPCXB $3.17M in 405, BNCB $1.25M in 366, NVDAB $1.18M in 340, AAPLB $0.85M in 101, SPYB $0.85M in 262, GMEB $0.82M in 210, FXIon $0.68M in 229.
+
+## 10 Oct 2026 · the example wallet went empty
+
+- NIUMA's treasury (0xe1B0…d767, a Safe) moved all its SPYB and NIUMA out on 10 Oct at 12:42 UTC. Its payslip went from 33 payouts and $276 to nothing, because I only ask transactions-by-address about stock tokens a wallet still holds (one call per token, to stay inside the rate limit).
+- A "payouts received by this wallet, any token" filter on /api/v1/dex/post-transaction/transactions-by-address (by methodId, or by direction and token list) would let a payslip survive the wallet selling. Today it needs one call per stock token, and there are 534.
+- The largest holder I found (0x2881…9307) has been paid about $17.1K in stock over 858+ payouts by 264 different memes, across 28 stock tokens. Its payslip takes a few seconds cold because of the two-page limit per token.

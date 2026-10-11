@@ -66,6 +66,7 @@
           <div class="seg" id="side">
             <button data-s="sell" class="on" data-zh="卖出，留下股票">Sell, keep the stock</button>
             <button data-s="buy" data-zh="用股票买入">Buy with stock</button>
+            <button data-s="bnb" data-zh="用 BNB 买入">Buy with BNB</button>
           </div>
           <label for="amount" id="amount-label">Amount to sell</label>
           <input id="amount" inputmode="decimal" value="100000" autocomplete="off">
@@ -110,6 +111,8 @@
 initLang();
 const addr = (new URLSearchParams(location.search).get('a') || NIUMA).toLowerCase();
 const USDT = '0x55d398326f99059ff775485246999027b3197955';
+// BNB itself, as Binance's aggregator writes it.
+const BNB = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
 const S = { hours: 24, seen: new Set(), d: null, quotes: null, side: 'sell' };
 
 const fail = (msg) => { $('page').hidden = true; $('state').hidden = false; $('state').textContent = msg; };
@@ -283,7 +286,7 @@ function renderCompany() {
 function amountUnits() {
   const text = $('amount').value.replace(/,/g, '').trim();
   if (!/^\d+(\.\d+)?$/.test(text) || !(Number(text) > 0)) return null;
-  const [whole, frac = ''] = text.split('.'), d = S.side === 'buy' ? 18 : S.d.coin.decimals ?? 18;
+  const [whole, frac = ''] = text.split('.'), d = S.side === 'sell' ? S.d.coin.decimals ?? 18 : 18;
   return (BigInt(whole) * 10n ** BigInt(d) + BigInt((frac + '0'.repeat(d)).slice(0, d) || '0')).toString();
 }
 
@@ -295,13 +298,14 @@ function queueQuotes() {
   quoteTimer = setTimeout(loadQuotes, 450);
 }
 // Two quotes each way. Selling: into the stock, and into USDT. Buying: paying with the stock, and
-// paying the same dollars in USDT.
+// paying the same dollars in USDT. Buying with BNB is one quote: BNB into the coin.
 async function loadQuotes() {
   const amount = amountUnits(), run = ++quoteRun, side = S.side, stock = S.d.stock;
   if (!amount) return;
   const q = (from, to, units) => apiJson(`/api/quote?from=${from}&to=${to}&amount=${units}`).catch((e) => ({ error: e.message }));
   let pair;
   if (side === 'sell') pair = [q(addr, stock.address, amount), q(addr, USDT, amount)];
+  else if (side === 'bnb') pair = [q(BNB, addr, amount), null];
   else {
     const dollars = Number(amount) / 1e18 * (stock.price || 0);
     pair = [q(stock.address, addr, amount), dollars > 0 ? q(USDT, addr, (BigInt(Math.round(dollars * 1e6)) * 10n ** 12n).toString()) : { error: t('No price for this stock', '这只股票暂无价格') }];
@@ -313,8 +317,8 @@ async function loadQuotes() {
 }
 
 function renderSell() {
-  const { coin, stock } = S.d, buy = S.side === 'buy', name = stockName(stock);
-  $('amount-label').textContent = buy ? t(stock.name + ' shares to spend', '花费 ' + name + ' 股数') : t(coin.symbol + ' to sell', '卖出 ' + coin.symbol + ' 数量');
+  const { coin, stock } = S.d, buy = S.side === 'buy', bnb = S.side === 'bnb', name = stockName(stock);
+  $('amount-label').textContent = bnb ? t('BNB to spend', '花费 BNB 数量') : buy ? t(stock.name + ' shares to spend', '花费 ' + name + ' 股数') : t(coin.symbol + ' to sell', '卖出 ' + coin.symbol + ' 数量');
   const opts = $('opts'), note = $('sell-note');
   opts.replaceChildren();
   if (!amountUnits()) { note.textContent = t('Enter an amount to see what you would receive.', '输入数量，查看你能换到什么。'); trade.render(); return; }
@@ -322,19 +326,21 @@ function renderSell() {
   const { keep, cash } = S.quotes;
   const hops = (q) => { const n = q.hops.length - 1; return zh ? n + ' 次兑换' : n + (n === 1 ? ' swap' : ' swaps'); };
   const opt = (k, tag, v, m, best) => { const o = el('div', 'opt' + (best ? ' best' : '')); const kk = el('div', 'k', k); if (tag) kk.append(el('span', null, tag)); o.append(kk, el('div', 'v', v), el('div', 'm', m)); return o; };
-  const mainLabel = buy ? t('Pay with the stock', '用股票支付') : t('Keep the stock', '留下股票');
+  const mainLabel = bnb ? t('Pay with BNB', '用 BNB 支付') : buy ? t('Pay with the stock', '用股票支付') : t('Keep the stock', '留下股票');
   const altLabel = buy ? t('Pay with cash', '用现金支付') : t('Take cash', '换成现金'), none = t('No quote', '无报价');
   const coins = (q) => num(Number(q.toAmount) / 10 ** (coin.decimals ?? 18)) + ' ' + coin.symbol;
   if (keep.error) opts.append(opt(mainLabel, null, none, why(keep.error), true));
+  else if (bnb) { const spent = Number(S.quotes.amount) / 1e18, got = Number(keep.toAmount) / 10 ** (coin.decimals ?? 18); opts.append(opt(mainLabel, hops(keep), coins(keep), t(`for ${spent} BNB, worth about `, `花费 ${spent} BNB，约值 `) + usd(got * (coin.price || 0)), true)); }
   else if (buy) { const spent = Number(S.quotes.amount) / 1e18; opts.append(opt(mainLabel, hops(keep), coins(keep), t(`for ${num(spent)} ${stock.name} shares, worth about `, `花费 ${num(spent)} 股 ${name}，约值 `) + usd(spent * (stock.price || 0)), true)); }
   else { const out = Number(keep.toAmount) / 1e18; opts.append(opt(mainLabel, hops(keep), num(out) + t(' shares', ' 股'), t(stock.name + ', worth about ', name + '，约值 ') + usd(out * (stock.price || 0)), true)); }
-  if (cash.error) opts.append(opt(altLabel, null, none, why(cash.error)));
+  if (!cash) { /* buying with BNB has no second way to pay */ }
+  else if (cash.error) opts.append(opt(altLabel, null, none, why(cash.error)));
   else if (buy) opts.append(opt(altLabel, hops(cash), coins(cash), t('for the same dollars in USDT', '花费等值的 USDT')));
   else opts.append(opt(altLabel, hops(cash), usd(Number(cash.toAmount) / 1e18), t('in USDT', '以 USDT 计')));
-  const tax = buy ? S.buyTax : S.sellTax;
+  const tax = buy || bnb ? S.buyTax : S.sellTax;
   note.textContent = keep.error ? (offlineError(keep.error) ? t('Quotes come from Binance. They will show here once it can be reached again.', '报价来自币安，连上之后会显示在这里。') : t('Binance could not quote this amount.', '币安无法为这个数量报价。'))
-    : zh ? `币安聚合器实时报价（${keep.vendor}）。价格影响 ${(keep.priceImpact * 100).toFixed(2)}%。` + (tax ? `这个币${buy ? '买入' : '卖出'}时还会收 ${(tax * 100).toFixed(1)}% 的税。` : '')
-    : `Live quotes from Binance's aggregator (${keep.vendor}). Price impact ${(keep.priceImpact * 100).toFixed(2)}%.` + (tax ? ` This coin also takes a ${(tax * 100).toFixed(1)}% tax on ${buy ? 'buys' : 'sells'}.` : '');
+    : zh ? `币安聚合器实时报价（${keep.vendor}）。价格影响 ${(keep.priceImpact * 100).toFixed(2)}%。` + (tax ? `这个币${buy || bnb ? '买入' : '卖出'}时还会收 ${(tax * 100).toFixed(1)}% 的税。` : '')
+    : `Live quotes from Binance's aggregator (${keep.vendor}). Price impact ${(keep.priceImpact * 100).toFixed(2)}%.` + (tax ? ` This coin also takes a ${(tax * 100).toFixed(1)}% tax on ${buy || bnb ? 'buys' : 'sells'}.` : '');
   trade.render();
 }
 
@@ -344,9 +350,15 @@ const trade = tradeFlow($('trade'), () => {
   const { coin, stock } = S.d, dec = coin.decimals ?? 18, name = stockName(stock);
   const coins = { symbol: coin.symbol, decimals: dec, text: (n) => full(n) + ' ' + coin.symbol, usd: coin.price };
   const shares = { symbol: name, decimals: 18, text: (n) => (zh ? `${num(n)} 股 ${name}` : `${num(n)} ${stock.name} shares`), usd: stock.price || 0 };
-  const typed = Number(S.quotes.amount) / 10 ** (S.quotes.side === 'buy' ? 18 : dec);
+  const typed = Number(S.quotes.amount) / 10 ** (S.quotes.side === 'sell' ? dec : 18);
   // Opened from this address, the page comes back on the same coin, side and amount.
   const link = `${location.origin}${location.pathname}?a=${addr}&side=${S.quotes.side}&amount=${encodeURIComponent($('amount').value.trim())}`;
+  if (S.quotes.side === 'bnb') return {
+    link,
+    from: BNB, to: addr, amount: S.quotes.amount, slippage: 3 + (S.buyTax || 0) * 100, receive: coins,
+    spend: { symbol: 'BNB', decimals: 18, text: (n) => Number(n.toPrecision(6)) + ' BNB', usd: 0 },
+    action: zh ? `用 ${typed} BNB 买入 ${coin.symbol}` : `Buy ${coin.symbol} with ${typed} BNB`,
+  };
   if (S.quotes.side === 'buy') return {
     link,
     from: stock.address, to: addr, amount: S.quotes.amount, slippage: 3 + (S.buyTax || 0) * 100, spend: shares, receive: coins,
@@ -359,15 +371,15 @@ const trade = tradeFlow($('trade'), () => {
   };
 });
 
-// Each side keeps its own amount: coins to sell, or shares of the stock to spend.
-const typed = { sell: null, buy: null };
+// Each side keeps its own amount: coins to sell, shares of the stock to spend, or BNB to spend.
+const typed = { sell: null, buy: null, bnb: '0.001' };
 $('side').onclick = (e) => {
   const side = e.target.dataset.s;
   if (!side || side === S.side || !S.d) return;
   typed[S.side] = $('amount').value;
   S.side = side;
   // A buy starts at about fifty dollars of the stock.
-  if (typed.buy == null) { const price = S.d.stock.price; typed.buy = price ? String(Number((50 / price).toPrecision(2))) : '1'; }
+  if (side === 'buy' && typed.buy == null) { const price = S.d.stock.price; typed.buy = price ? String(Number((50 / price).toPrecision(2))) : '1'; }
   $('amount').value = typed[side];
   for (const b of $('side').children) b.classList.toggle('on', b.dataset.s === side);
   queueQuotes();
@@ -410,6 +422,7 @@ async function init() {
   // A link can open the page on one side with an amount filled in, e.g. from the Telegram bot.
   const asked = new URLSearchParams(location.search), amount = /^\d+(\.\d+)?$/.test(asked.get('amount') || '') ? asked.get('amount') : null;
   if (asked.get('side') === 'buy') { typed.buy = amount; $('side').querySelector('[data-s=buy]').click(); }
+  else if (asked.get('side') === 'bnb') { if (amount) typed.bnb = amount; $('side').querySelector('[data-s=bnb]').click(); }
   else if (amount) $('amount').value = amount;
   renderAll(); renderSell(); loadQuotes();
   loadSafety().then(() => { renderHead(); renderMove(); renderSell(); });

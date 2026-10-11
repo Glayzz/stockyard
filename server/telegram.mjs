@@ -14,7 +14,7 @@ import { homeImage, leagueImage, coinImage } from './cards.mjs';
 
 const STATE = fileURLToPath(new URL('../data/telegram.json', import.meta.url));
 const USDT = '0x55d398326f99059ff775485246999027b3197955';
-const DEMO = '0xe1b0e19f8e014e760bfa6f81769fd3587cf9d767'; // NIUMA's treasury, offered as an example
+const DEMO = '0x28816c4c4792467390c90e5b426f198570e29307'; // NIUMA's largest holder, offered as an example
 const MAX_WATCHED = 200;
 
 const isAddr = (a) => /^0x[0-9a-fA-F]{40}$/.test(a || '');
@@ -181,7 +181,7 @@ function askWallet(ctx) {
   return say(ctx, zh
     ? stack('🧾 <b>牛马工资条</b>', '', '把钱包地址发给我，我就打印它的工资条：它持有的 Meme 用真实股票给它发过的每一笔工资。', '', '<i>地址以 0x 开头，共 42 个字符。</i>')
     : stack('🧾 <b>牛马工资条 · Payslip</b>', '', 'Send me a wallet address and I will print its payslip: every payout its memes have made to it in real stock.', '', '<i>An address starts with 0x and is 42 characters long.</i>'), [
-    [btn(zh ? '看个例子：NIUMA 金库' : 'Show me one: NIUMA\'s treasury', 'p:' + DEMO)], [btn(zh ? '‹ 首页' : '‹ Home', 'h')],
+    [btn(zh ? '看个例子：NIUMA 最大持有人' : 'Show me one: NIUMA\'s largest holder', 'p:' + DEMO)], [btn(zh ? '‹ 首页' : '‹ Home', 'h')],
   ]);
 }
 
