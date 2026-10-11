@@ -16,12 +16,19 @@ function recheck() {
   setTimeout(() => send('/api/v1/dex/market/rwa/platforms').then(() => { down = false; }, (e) => { if (e.offline) recheck(); else down = false; }), 30000).unref();
 }
 
+// A call turned away by the rate limit (code 42900) is asked again a little later, a few times,
+// rather than failing whatever was waiting on it.
+const LIMITED = '42900', WAITS = [400, 900, 1600, 2600];
+
 export async function bw3(path, opts) {
   if (down) throw new Error('Binance cannot be reached from this server right now');
-  try { return await send(path, opts); }
-  catch (err) {
-    if (err.offline && !down) { down = true; recheck(); }
-    throw err;
+  for (let attempt = 0; ; attempt++) {
+    try { return await send(path, opts); }
+    catch (err) {
+      if (err.offline && !down) { down = true; recheck(); }
+      if (err.code !== LIMITED || attempt >= WAITS.length) throw err;
+      await new Promise((r) => setTimeout(r, WAITS[attempt] + Math.random() * 300));
+    }
   }
 }
 
@@ -48,6 +55,6 @@ async function send(path, { method = 'GET', params, body } = {}) {
   let json;
   try { json = JSON.parse(text); } catch { throw new Error(`HTTP ${res.status}, not JSON: ${text.slice(0, 120) || '(empty body)'}`); }
   // The API reports failures as HTTP 200 with a code in the body.
-  if (!OK.has(json.code)) throw new Error(`code ${json.code}: ${json.msg}`);
+  if (!OK.has(json.code)) throw Object.assign(new Error(`code ${json.code}: ${json.msg}`), { code: String(json.code) });
   return json.data;
 }

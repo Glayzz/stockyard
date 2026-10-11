@@ -7,9 +7,13 @@ import { multicallAll, addrWord, toNum } from './chain.mjs';
 // The call stock-paying tax tokens use to send holders their share. Incoming stock transfers made
 // through it are payouts; anything else (a swap, a plain transfer) is not counted as pay.
 const PAYOUT_METHOD = '0x84da2c7b';
-const HISTORY_LINES = 6, HISTORY_PAGES = 2, HISTORY_AT_ONCE = 3;
+const HISTORY_LINES = 6, HISTORY_PAGES = 2, HISTORY_AT_ONCE = 2;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const cache = new Map();
+// Finished payslips, and each stock's payout history on its own. A history is kept for 10 minutes,
+// and an older one stands in when Binance cannot be asked, so the site and the bot print the same
+// slip for a wallet instead of each counting whichever stocks happened to answer.
+const cache = new Map(), asking = new Map(), histories = new Map();
+const FRESH = 600000, STAND_IN = 6 * 3600000;
 
 // What the wallet holds of every stock token, in one on-chain read. With 534 stock tokens the
 // Wallet API's 20-per-call balance endpoint would take 27 calls, so it is kept for payout history.
@@ -56,16 +60,29 @@ async function payouts(wallet, stock) {
   return { list: out, more };
 }
 
-// Payout history for the largest lines, a few at a time. Returns false if Binance could not be
-// asked, in which case the payslip still prints, without it.
+async function historyOf(wallet, stock) {
+  const key = wallet + ':' + stock, kept = histories.get(key);
+  if (kept && Date.now() - kept.at < FRESH) return kept.value;
+  try {
+    const value = await payouts(wallet, stock);
+    histories.set(key, { at: Date.now(), value });
+    return value;
+  } catch (err) {
+    if (kept && Date.now() - kept.at < STAND_IN) return kept.value;
+    throw err;
+  }
+}
+
+// Payout history for the largest lines, a couple at a time. Returns false if any of it could not
+// be had, in which case the payslip still prints, with the lines that could.
 async function addHistory(wallet, lines, recent) {
   const todo = lines.slice(0, HISTORY_LINES);
   let ok = true;
   await Promise.all(Array.from({ length: Math.min(HISTORY_AT_ONCE, todo.length) }, async () => {
-    while (ok && todo.length) {
+    while (todo.length) {
       const line = todo.shift();
       try {
-        const { list, more } = await payouts(wallet, line.address);
+        const { list, more } = await historyOf(wallet, line.address);
         if (!list.length) continue;
         line.paid = {
           shares: list.reduce((a, p) => a + p.shares, 0), count: list.length, first: list[list.length - 1].time, last: list[0].time,
@@ -78,11 +95,17 @@ async function addHistory(wallet, lines, recent) {
   return ok;
 }
 
+// The site and the bot asking for one wallet at the same moment share a single build of its slip.
+// A slip missing some history is kept only briefly, so the next request tries again.
 export async function payslip(input) {
   const wallet = input.toLowerCase();
   const hit = cache.get(wallet);
-  if (hit && Date.now() - hit.at < 120000) return hit.value;
+  if (hit && Date.now() - hit.at < (hit.value.history ? 120000 : 15000)) return hit.value;
+  if (!asking.has(wallet)) asking.set(wallet, build(wallet).finally(() => asking.delete(wallet)));
+  return asking.get(wallet);
+}
 
+async function build(wallet) {
   const lg = await league();
   const lines = await stockLines(wallet, lg);
 
