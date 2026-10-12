@@ -2,8 +2,9 @@
 // under it: home, the league, a coin's card, a wallet's payslip. Tapping a button redraws the
 // same message, so a chat holds one live screen plus the payslips it printed. Long polling, so it
 // needs no public address. It starts only when TELEGRAM_BOT_TOKEN is set. It holds no key and
-// cannot trade: a price check shows what a trade would give right now, and the trade itself is
-// signed on the site in the user's own wallet.
+// cannot trade: a price check shows what a trade would give right now, and every Trade button is a
+// link to the coin's page on the site, where the trade is signed in the user's own wallet. The
+// Portfolio button is a link too: the wallet connects on the site, never in the chat.
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { replies } from './net.mjs';
@@ -15,6 +16,8 @@ import { homeImage, leagueImage, coinImage } from './cards.mjs';
 const STATE = fileURLToPath(new URL('../data/telegram.json', import.meta.url));
 const USDT = '0x55d398326f99059ff775485246999027b3197955';
 const DEMO = '0x28816c4c4792467390c90e5b426f198570e29307'; // NIUMA's largest holder, offered as an example
+const NIUMA = '0xc01a2e136f92772eecab15eb054e8f6fa06b7777'; // the flagship coin, listed first where coins are offered
+const X_URL = 'https://x.com/Stockyard_BNB'; // the project's account on X
 const MAX_WATCHED = 200;
 
 const isAddr = (a) => /^0x[0-9a-fA-F]{40}$/.test(a || '');
@@ -36,6 +39,11 @@ const listed = (r) => r.mcap >= 100000 && r.stockUsd >= 1000;
 const stack = (...parts) => parts.join('\n');
 
 let token, site, base, state = { offset: 0, chats: {} };
+// Where a trade happens: the coin's page on the site, signed there in the user's own wallet.
+// side is sell (the page's default), buy (with the stock) or bnb; amount fills the box in.
+// The portfolio is one page for everyone: it shows nothing until a wallet connects there.
+const portfolioUrl = () => `${site}/portfolio.html`;
+const tradeUrl = (address, side, amount) => `${site}/coin.html` + (address ? `?a=${address}` + (side ? `&side=${side}` : '') + (amount ? `&amount=${amount}` : '') : '');
 const save = () => { try { writeFileSync(STATE, JSON.stringify(state)); } catch {} };
 const chatOf = (id, from) => (state.chats[id] ??= { lang: (from?.language_code || '').toLowerCase().startsWith('zh') ? 'zh' : 'en' });
 
@@ -161,17 +169,19 @@ async function home(ctx) {
   const caption = zh
     ? stack('🐂 <b>Stockyard</b>', '股票 Meme 的家', '',
       '股票 Meme 是 BNB Chain 上与真实美股配对交易的 Meme 币，而不是与 BNB 配对。其中一些会用这只股票给持有人发工资。', '',
-      '🧾 <b>工资条</b>  ·  一个钱包领到了多少股票', '🏆 <b>排行榜</b>  ·  所有股票 Meme 的排名', '🔔 <b>发薪提醒</b>  ·  钱包发薪时通知你', '',
+      '🧾 <b>工资条</b>  ·  一个钱包领到了多少股票', '🏆 <b>排行榜</b>  ·  所有股票 Meme 的排名', ...(site ? ['💱 <b>交易</b>  ·  打开网站，用你自己的钱包签名', '📊 <b>持仓</b>  ·  在网站连接钱包，看它持有什么'] : []), '🔔 <b>发薪提醒</b>  ·  钱包发薪时通知你', '',
       '<i>随时可以把钱包地址或币名直接发给我。</i>')
     : stack('🐂 <b>Stockyard</b>', 'The home for stock memes', '',
       'Stock memes are meme coins on BNB Chain that trade against a real US stock instead of BNB. Some of them pay their holders in that stock.', '',
-      '🧾 <b>Payslip</b>  ·  what a wallet has been paid in stock', '🏆 <b>League</b>  ·  every stock meme, ranked', '🔔 <b>Payday alerts</b>  ·  a message when a wallet is paid', '',
+      '🧾 <b>Payslip</b>  ·  what a wallet has been paid in stock', '🏆 <b>League</b>  ·  every stock meme, ranked', ...(site ? ['💱 <b>Trade</b>  ·  opens the site, you sign in your own wallet', '📊 <b>Portfolio</b>  ·  connect your wallet on the site to see what it holds'] : []), '🔔 <b>Payday alerts</b>  ·  a message when a wallet is paid', '',
       '<i>You can also send me a wallet address or a coin\'s name at any time.</i>');
   const keys = [
     [btn(zh ? '🧾 工资条' : '🧾 Payslip', 'ps'), btn(zh ? '🏆 排行榜' : '🏆 League', 'l:')],
+    // Trade and Portfolio are links, not screens: they open the site, where the wallet connects and signs.
+    ...(site ? [[link(zh ? '💱 交易 ↗' : '💱 Trade ↗', tradeUrl()), link(zh ? '📊 持仓 ↗' : '📊 Portfolio ↗', portfolioUrl())]] : []),
     [btn(zh ? '🔔 发薪提醒' : '🔔 Payday alerts', 'al'), btn(zh ? '🌐 English' : '🌐 中文', 'lg')],
   ];
-  if (site) keys.push([link(zh ? '打开 Stockyard 网站 ↗' : 'Open the Stockyard site ↗', site)]);
+  keys.push([...(site ? [link(zh ? 'Stockyard 网站 ↗' : 'Stockyard site ↗', site)] : []), link('X ↗', X_URL)]);
   return screen(ctx, { key: 'home:' + ctx.c.lang, keep: 1800000, draw: () => homeImage(lg.stats, lg.rows.filter(listed).length, zh), caption, keys });
 }
 
@@ -317,16 +327,18 @@ async function coin(ctx, q) {
     t(`Its pool holds <b>${num(d.pool.shares)} shares</b>, worth <b>${usd(d.pool.stockUsd)}</b>.`, `它的池子里有 <b>${num(d.pool.shares)} 股</b>，价值 <b>${usd(d.pool.stockUsd)}</b>。`), '',
     ...facts, ...moves, '',
     `${t('Contract', '合约')}${t(':', '：')}`, `<code>${r.address}</code>`, '',
-    `<i>${t('Price check shows what a sale or a buy would give right now.', '「查价」会显示现在卖出或买入能换到多少。')}</i>`);
+    `<i>${site ? t('Trade opens this coin on the site, where you sign in your own wallet. ', '「交易」会在网站上打开这个币，用你自己的钱包签名。') : ''}${t('Price check shows what a sale or a buy would give right now.', '「查价」会显示现在卖出或买入能换到多少。')}</i>`);
 
   // The coin's own links, as its team set them, then where to look it up and where to go next.
   const own = d.coin.links || {}, social = [];
   if (own.website) social.push(link(t('Website ↗', '官网 ↗'), own.website));
   if (own.x) social.push(link('X ↗', own.x));
   if (own.telegram) social.push(link('Telegram ↗', own.telegram));
-  const keys = [[btn(t('💱 Price check', '💱 查价'), 'q:' + r.address)]];
+  const keys = [];
+  if (site) keys.push([link(t(`💱 Trade ${d.coin.symbol} on Stockyard ↗`, `💱 去 Stockyard 交易 ${d.coin.symbol} ↗`), tradeUrl(r.address))]);
+  keys.push([btn(t('🔎 Price check', '🔎 查价'), 'q:' + r.address)]);
   if (social.length) keys.push(social);
-  keys.push([link('BscScan ↗', 'https://bscscan.com/token/' + r.address), ...(site ? [link(t('Trade on Stockyard ↗', '去 Stockyard 交易 ↗'), `${site}/coin.html?a=${r.address}`)] : own.dex ? [link('DexScreener ↗', own.dex)] : [])]);
+  keys.push([link('BscScan ↗', 'https://bscscan.com/token/' + r.address), ...(own.dex ? [link('DexScreener ↗', own.dex)] : [])]);
   keys.push([btn(t('‹ League', '‹ 排行榜'), 'l:'), btn(t('🏠 Home', '🏠 首页'), 'h')]);
   return screen(ctx, { key: `coin:${ctx.c.lang}:${r.address}`, keep: 180000, draw: () => coinImage(d, split, zh), caption, keys });
 }
@@ -341,6 +353,7 @@ async function checkMenu(ctx, q) {
     : stack(`💱 <b>Price check · ${sym}</b>`, '', 'See what a trade would give you right now, priced live by Binance\'s aggregator.', '', `<b>Sell</b>  ·  ${sym} into ${stock} shares, or into cash`, `<b>Buy</b>  ·  pay with ${stock} shares`, '', 'Pick a size below.', '<i>Nothing is bought or sold in this chat.</i>'), [
     [10, 100, 1000].map((v) => btn((zh ? '卖出 ' : 'Sell ') + (v === 1000 ? '$1K' : '$' + v), `s:${a}:${v}`)),
     [10, 100, 1000].map((v) => btn((zh ? '买入 ' : 'Buy ') + (v === 1000 ? '$1K' : '$' + v), `b:${a}:${v}`)),
+    ...(site ? [[link(zh ? `💱 去 Stockyard 交易 ${r.coin} ↗` : `💱 Trade ${r.coin} on Stockyard ↗`, tradeUrl(a))]] : []),
     [btn('‹ ' + r.coin, 'c:' + a)],
   ]);
 }
@@ -375,8 +388,49 @@ async function check(ctx, side, q, dollars) {
   }
   out.push('', `<i>${t('A live price from Binance, not a trade. To trade, open the coin page and sign with your own wallet.', '这是币安的实时报价，不是交易。要交易，请打开币页面，用自己的钱包签名。')}</i>`);
   const keys = [[btn(t('‹ Price check', '‹ 查价'), 'q:' + r.address), btn('‹ ' + r.coin, 'c:' + r.address)]];
-  if (site) keys.unshift([link(t('Make this trade on Stockyard ↗', '去 Stockyard 完成这笔交易 ↗'), `${site}/coin.html?a=${r.address}&side=${side === 's' ? 'sell' : 'buy'}&amount=${amount}`)]);
+  if (site) keys.unshift([link(t('Make this trade on Stockyard ↗', '去 Stockyard 完成这笔交易 ↗'), tradeUrl(r.address, side === 's' ? 'sell' : 'buy', amount))]);
   return say(ctx, out.join('\n'), keys);
+}
+
+// /portfolio. The bot never sees a wallet's key, so the portfolio opens on the site, where the
+// wallet connects. Connecting there shares an address and signs nothing.
+function portfolio(ctx) {
+  const zh = ctx.c.lang === 'zh';
+  if (!site) return home(ctx);
+  return say(ctx, zh
+    ? stack('📊 <b>持仓</b>', '', '在 Stockyard 网站连接你的钱包，查看它持有的每一个股票 Meme、每一只代币化股票和现金：总资产、资产分布图，以及它实际押注的股票。', '', '连接只会把你的地址告诉网站，不需要签名，也不会动用任何资产。本机器人不持有任何私钥。', '', '<i>想看一个钱包领到了多少股票，把它的地址发给我，我来打印工资条。</i>')
+    : stack('📊 <b>Portfolio</b>', '', 'Connect your wallet on the Stockyard site to see every stock meme, tokenized stock and dollar it holds: net worth, allocation charts and the stocks it is really riding.', '', 'Connecting only tells the site your address. Nothing is signed and nothing moves. This bot holds no keys.', '', '<i>To see what a wallet has been paid in stock, send me its address and I will print its payslip.</i>'), [
+    [link(zh ? '📊 打开我的持仓 ↗' : '📊 Open my portfolio ↗', portfolioUrl())],
+    [btn(zh ? '🧾 工资条' : '🧾 Payslip', 'ps'), btn(zh ? '🏠 首页' : '🏠 Home', 'h')],
+  ]);
+}
+
+// /trade. Every button here is a link to the site: nothing is bought or sold from the chat.
+async function trade(ctx, q) {
+  const zh = ctx.c.lang === 'zh';
+  if (!site) return home(ctx);
+  const how = zh ? '交易在 Stockyard 网站上完成，用你自己的钱包签名。本机器人不持有任何私钥。' : 'Trading happens on the Stockyard site, signed in your own wallet. This bot holds no keys.';
+  const found = q ? await findCoin(q) : null;
+  if (q && !found) return noCoin(ctx, q);
+  if (found) {
+    const r = found.row, a = r.address, sym = esc(r.coin), stock = esc(nameOf(r, zh));
+    return say(ctx, zh
+      ? stack(`💱 <b>交易 ${sym}</b>`, '', how, '', `<b>卖出，留下股票</b>  ·  把 ${sym} 换成 ${stock} 股票`, `<b>用股票买入</b>  ·  用 ${stock} 股票支付`, '<b>用 BNB 买入</b>  ·  用 BNB 支付')
+      : stack(`💱 <b>Trade ${sym}</b>`, '', how, '', `<b>Sell, keep the stock</b>  ·  ${sym} into ${stock} shares`, `<b>Buy with stock</b>  ·  pay with ${stock} shares`, '<b>Buy with BNB</b>  ·  pay with BNB'), [
+      [link(zh ? '卖出，留下股票 ↗' : 'Sell, keep the stock ↗', tradeUrl(a, 'sell'))],
+      [link(zh ? '用股票买入 ↗' : 'Buy with stock ↗', tradeUrl(a, 'buy')), link(zh ? '用 BNB 买入 ↗' : 'Buy with BNB ↗', tradeUrl(a, 'bnb'))],
+      [btn('‹ ' + r.coin, 'c:' + a), btn(zh ? '🏠 首页' : '🏠 Home', 'h')],
+    ]);
+  }
+  // NIUMA, then the listed coins with the most stock in their pools: six links in all.
+  const lg = await api('/api/league'), once = new Set();
+  const top = lg.rows.filter(listed).sort((x, y) => (y.address === NIUMA) - (x.address === NIUMA) || y.stockUsd - x.stockUsd).filter((r) => !once.has(r.address) && once.add(r.address)).slice(0, 6);
+  const keys = [[link(zh ? '💱 打开交易页面 ↗' : '💱 Open the Trade page ↗', tradeUrl())]];
+  for (let i = 0; i < top.length; i += 3) keys.push(top.slice(i, i + 3).map((r) => link(r.coin + ' ↗', tradeUrl(r.address))));
+  keys.push([btn(zh ? '🏆 排行榜' : '🏆 League', 'l:'), btn(zh ? '🏠 首页' : '🏠 Home', 'h')]);
+  return say(ctx, zh
+    ? stack('💱 <b>交易</b>', '', how, '', '打开交易页面，或者直接选下面的一个币。', '<i>也可以发送 /trade 加币名，例如 /trade niuma。</i>')
+    : stack('💱 <b>Trade</b>', '', how, '', 'Open the Trade page, or go straight to one of the coins below.', '<i>You can also send /trade and the name of a coin, like /trade niuma.</i>'), keys);
 }
 
 function alerts(ctx) {
@@ -449,6 +503,8 @@ async function onText(ctx, text) {
   if (cmd === 'payslip') return isAddr(rest[0]) ? slip(ctx, rest[0]) : askWallet(ctx);
   if (cmd === 'league') return league(ctx, rest[0]);
   if (cmd === 'coin') return rest[0] ? coin(ctx, rest[0]) : league(ctx);
+  if (cmd === 'trade') return trade(ctx, rest[0]);
+  if (cmd === 'portfolio') return portfolio(ctx);
   if (cmd === 'alerts') return alerts(ctx);
   if (cmd === 'watch') return isAddr(rest[0]) ? watch(ctx, rest[0]) : alerts(ctx);
   if (cmd === 'unwatch') return unwatch(ctx);
@@ -556,6 +612,8 @@ export async function startTelegram() {
     { command: 'start', description: zh ? '首页' : 'Home' },
     { command: 'payslip', description: zh ? '打印钱包的牛马工资条' : 'Print a wallet\'s payslip' },
     { command: 'league', description: zh ? '股票 Meme 排行榜' : 'The stock meme league' },
+    { command: 'trade', description: zh ? '去网站交易股票 Meme' : 'Trade a stock meme on the site' },
+    { command: 'portfolio', description: zh ? '在网站查看你的持仓' : 'Your portfolio on the site' },
     { command: 'alerts', description: zh ? '发薪提醒' : 'Payday alerts' },
     { command: 'lang', description: zh ? 'English' : '中文' },
   ];
@@ -565,11 +623,11 @@ export async function startTelegram() {
     // What a new user reads before pressing Start, and the line on the bot's profile.
     await tg('setMyDescription', { description: [
       'Stock memes are meme coins on BNB Chain that trade against a real US stock, and some pay their holders in that stock.', '',
-      'Print any wallet\'s 牛马工资条 payslip, browse the league, check a price, and get a message on payday. This bot holds no keys and cannot trade.',
+      'Print any wallet\'s 牛马工资条 payslip, browse the league, check a price, and get a message on payday. Trade and Portfolio buttons open the Stockyard site, where you connect and sign with your own wallet: this bot holds no keys.',
     ].join('\n') });
     await tg('setMyDescription', { language_code: 'zh', description: [
       '股票 Meme 是 BNB Chain 上与真实美股配对交易的 Meme 币，其中一些会用这只股票给持有人发工资。', '',
-      '打印任意钱包的牛马工资条，查看排行榜、查价，发薪时收到通知。本机器人不持有任何私钥，也无法交易。',
+      '打印任意钱包的牛马工资条，查看排行榜、查价，发薪时收到通知。「交易」和「持仓」按钮会打开 Stockyard 网站，用你自己的钱包连接和签名：本机器人不持有任何私钥。',
     ].join('\n') });
     // The bio, at most 120 characters, ends with the site's address when the server knows it.
     const where = site ? ' ' + site.replace(/^https?:\/\//, '') : '';

@@ -2,6 +2,7 @@
 import { bw3 } from './binance.mjs';
 import { league } from './league.mjs';
 import { payslip } from './payslip.mjs';
+import { portfolio } from './portfolio.mjs';
 import { coin } from './coin.mjs';
 import { prepare, status } from './swap.mjs';
 import { status as parts } from './status.mjs';
@@ -76,6 +77,10 @@ const routes = {
 
   // A wallet's stock tokens, the stock memes behind them and the payouts it has received.
   'GET /api/payslip': (q) => { if (!isAddr(q.w)) throw bad('w must be a wallet address'); return payslip(q.w); },
+
+  // Everything a wallet holds that Stockyard knows: stock memes, tokenized stock and cash, with
+  // each meme valued at what its pool would pay for it.
+  'GET /api/portfolio': (q) => { if (!isAddr(q.w)) throw bad('w must be a wallet address'); return portfolio(q.w); },
 
   // Builds the approval and swap for the user's own wallet to sign, with a dry run. Moves nothing.
   'POST /api/swap/prepare': (_q, body) => {

@@ -16,9 +16,11 @@
     <nav class="nav">
       <a href="index.html" data-zh="排行榜">League</a>
       <a href="coin.html" data-zh="交易">Trade</a>
+      <a href="portfolio.html" data-zh="持仓">Portfolio</a>
       <a class="on" href="payslip.html" data-zh="工资条">工资条 Payslip</a>
       <a href="agents.html" data-zh="智能体">Agents</a>
       <a href="https://t.me/Stockyard_PayslipBot" target="_blank" rel="noopener" data-zh="机器人 ↗">Bot ↗</a>
+      <a href="https://x.com/Stockyard_BNB" target="_blank" rel="noopener">X ↗</a>
       <button class="lang" id="lang" type="button">中文</button>
     </nav>
   </div>
@@ -363,7 +365,7 @@ $('share').onclick = () => {
   const d = P.data;
   const post = d.paid ? (zh ? `我的 Meme 已经分 ${d.paid.count} 次给我发了 ${usd(d.paid.usd)} 的真实股票。牛马工资条` : `My memes have paid me ${usd(d.paid.usd)} in real stock across ${d.paid.count} payouts. 牛马工资条`)
     : d.lines.length ? (zh ? `我的钱包里有 ${usd(d.total)} 的代币化股票。牛马工资条` : `My wallet holds ${usd(d.total)} of tokenized stock. 牛马工资条`) : t('Waiting on my first stock payslip. 牛马工资条', '等我的第一张股票工资条。牛马工资条');
-  window.open('https://x.com/intent/post?text=' + encodeURIComponent(post) + '&url=' + encodeURIComponent(location.href), '_blank', 'noopener');
+  window.open('https://x.com/intent/post?text=' + encodeURIComponent(post) + '&url=' + encodeURIComponent(location.href) + '&via=' + X_HANDLE, '_blank', 'noopener');
 };
 $('copy').onclick = async () => {
   try { await navigator.clipboard.writeText(location.href); $('copy').textContent = t('Link copied', '链接已复制'); } catch { $('copy').textContent = t('Copy failed', '复制失败'); }

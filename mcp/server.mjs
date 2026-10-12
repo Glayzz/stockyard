@@ -63,6 +63,16 @@ const tools = [
     run: (a) => api('/api/payslip?w=' + a.wallet),
   },
   {
+    name: 'stock_portfolio',
+    description: 'Everything a wallet holds that Stockyard knows: stock memes, tokenized stock and cash, read from BNB Chain. Each meme carries two numbers: mark (balance times pool price) and value (what its own pool would pay for the whole holding today, before the coin\'s tax). Also which stocks the wallet is exposed to, directly and through memes. Read-only.',
+    inputSchema: { type: 'object', properties: { wallet: { ...ADDRESS, description: 'The wallet address' } }, required: ['wallet'] },
+    run: async (a) => {
+      const p = await api('/api/portfolio?w=' + a.wallet);
+      // The full lists can run to hundreds of dust holdings; an agent gets the ones that matter.
+      return { ...p, memes: p.memes.slice(0, 25), stocks: p.stocks.slice(0, 25), exposure: p.exposure.slice(0, 12), odd: p.odd.slice(0, 10) };
+    },
+  },
+  {
     name: 'keep_stock_quote',
     description: 'Quote selling a stock meme two ways through Binance\'s aggregator: into the stock it trades against (keep the stock) and into USDT (take cash). Quotes only; it sends nothing.',
     inputSchema: {

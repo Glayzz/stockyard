@@ -5,6 +5,7 @@ stock instead of BNB. Built by a member of the 牛马 NIUMA community for
 [BNB Hack: Tokenized Stocks Edition](https://www.bnbchain.org/en/hackathons/tokenized-stocks).
 
 **Live: https://stockyardbnb.duckdns.org** · Telegram bot [@Stockyard_PayslipBot](https://t.me/Stockyard_PayslipBot) ·
+X [@Stockyard_BNB](https://x.com/Stockyard_BNB) ·
 paid data for agents at [`/x402`](https://stockyardbnb.duckdns.org/x402)
 
 An on-chain scan on 6 October 2026 found 202,703 PancakeSwap v2 pools that pair a coin with a
@@ -18,14 +19,15 @@ worth $100K or more. Some pay their holders in stock. Until now there was no too
 | `public/index.html` · League | Every stock meme, ranked by how much real stock sits in its pool, by company. |
 | `public/coin.html` · Coin | Why a coin's price moved (meme leg vs stock leg), the stock behind it (token price against the real share, 52-week range), real Binance quotes for selling into the stock or into cash and for buying with the stock or with cash, the trade itself with a dry run first, and live trades through the pool. |
 | `public/payslip.html` · 牛马工资条 | Paste a wallet, print a payslip of every payout it has received in stock tokens, with dates, and the stock memes behind them. Save it as an image. Then put the pay to work: swap part of each stock line back into the coin behind it, or gather small lines into one stock, with a Binance quote and a dry run first. |
+| `public/portfolio.html` · Portfolio | A portfolio dashboard. It shows placeholders until a wallet connects (the same wallet buttons as the Trade page; nothing is signed), then that wallet's net worth, the day's move, what it has been paid in stock, a ring chart of stock memes, tokenized stock and cash, a ring chart of the stocks it is exposed to directly and through memes, its largest holdings, and every asset in one table with a trade one tap away. A meme is counted at what its own pool would pay for the whole holding today, not at price times balance, so a large holder in a shallow pool sees the number they could really take out. |
 | `public/agents.html` · Agents | What an agent can do with Stockyard, each item linked to its on-chain proof: the agent's identity, a settled paid call, the agent funding itself, and a live stock trade. |
 | `skills/stockyard-stock-memes` | A skill in the Binance Skills Hub format that hands execution to Binance Agentic Wallet. |
-| `mcp/server.mjs` | The same data as five MCP tools for any agent. |
+| `mcp/server.mjs` | The same data as six MCP tools for any agent. |
 | `scripts/agentic-trade.mjs` | A Stockyard trade carried out by Binance Agentic Wallet: Stockyard names the trade and checks it (aggregator quote, balance, Transaction API), then the wallet signed in through Binance's `baw` CLI quotes it again and executes it. It previews by default and trades only with `--send`. |
 | `server/paid.mjs` · `/x402` | The same data sold to agents per call over x402, settled through Binance's B402: one cent for the league or a coin, two for a payslip. `GET /x402` is the free catalogue. Each settled call also lists the resource in B402's Bazaar. |
 | `scripts/x402-buy.mjs` | An agent paying for that data with no SDK: about 150 lines that take the 402, sign an EIP-3009 authorization and call again. The buyer needs no BNB. |
 | `stockyardagent/` | The Stockyard agent, scaffolded with BNB Agent Studio: an ERC-8004 identity on BNB Chain (agent 365431), Studio's runtime with an A2A card and an MCP endpoint, and a work hook that is fixed code, not an LLM. See its own README. |
-| `server/telegram.mjs` | A Telegram bot whose every screen is a picture in the site's look with buttons under it: home, the league by company, a coin's card with its own links, and a wallet's payslip. Tapping a button redraws the same message. A price check shows what a sale or a buy would give right now, and payday alerts send the updated slip. A link from the site opens the bot on a wallet. English and 中文. It holds no key and cannot trade. |
+| `server/telegram.mjs` | A Telegram bot whose every screen is a picture in the site's look with buttons under it: home, the league by company, a coin's card with its own links, and a wallet's payslip. Tapping a button redraws the same message. A price check shows what a sale or a buy would give right now, and payday alerts send the updated slip. Trade is a link, never a trade: the button on the home screen, the one at the top of each coin's card and the `/trade` command all open the coin's page on the site, where the user's own wallet signs. Portfolio is a link too: its button on the home screen and the `/portfolio` command open the portfolio page, where the wallet connects. A link from the site opens the bot on a wallet. English and 中文. It holds no key and cannot trade. |
 
 ## Status
 

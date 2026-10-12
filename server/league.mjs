@@ -295,7 +295,9 @@ let cache = null, building = null;
 // After a restart the last league saved to disk is served at once while a fresh one is built.
 export async function league(maxAgeMs = 120000) {
   for (const file of [SNAP, SEED]) if (!cache && existsSync(file)) { try { cache = JSON.parse(readFileSync(file, 'utf8')); } catch {} }
-  if (cache && Date.now() - Date.parse(cache.updatedAt) < maxAgeMs) return cache;
+  // LEAGUE_REFRESH=off serves the saved league as it is, for working on the site over a connection
+  // too slow to re-read thousands of pools every two minutes. Never set on a server.
+  if (cache && (process.env.LEAGUE_REFRESH === 'off' || Date.now() - Date.parse(cache.updatedAt) < maxAgeMs)) return cache;
   if (!building) {
     building = build().then((v) => { cache = v; try { writeFileSync(SNAP, JSON.stringify(v)); } catch {} return v; }).finally(() => { building = null; });
     // Logged here so a failed refresh never becomes an unhandled rejection; the last good copy keeps being served.

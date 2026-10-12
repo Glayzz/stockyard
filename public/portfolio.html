@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stockyard · Portfolio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=JetBrains+Mono:wght@500;700&family=Noto+Sans+SC:wght@500;900&family=Space+Grotesk:wght@400;500;700&display=swap" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <a class="brand" href="index.html">STOCKYARD <small>牛马</small></a>
+    <nav class="nav">
+      <a href="index.html" data-zh="排行榜">League</a>
+      <a href="coin.html" data-zh="交易">Trade</a>
+      <a class="on" href="portfolio.html" data-zh="持仓">Portfolio</a>
+      <a href="payslip.html" data-zh="工资条">工资条 Payslip</a>
+      <a href="agents.html" data-zh="智能体">Agents</a>
+      <a href="https://t.me/Stockyard_PayslipBot" target="_blank" rel="noopener" data-zh="机器人 ↗">Bot ↗</a>
+      <a href="https://x.com/Stockyard_BNB" target="_blank" rel="noopener">X ↗</a>
+      <button class="lang" id="lang" type="button">中文</button>
+    </nav>
+  </div>
+
+  <div class="pf-head">
+    <div>
+      <h1 data-zh="我的持仓">Portfolio</h1>
+      <p id="pf-sub" data-zh="你在 BNB Chain 上的股票 Meme、代币化股票和现金。">Your stock memes, tokenized stock and cash on BNB Chain.</p>
+    </div>
+    <div class="pf-wallet" id="pf-wallet"></div>
+  </div>
+
+  <section class="card pf-connect" id="gate">
+    <h2 data-zh="连接钱包，查看你的持仓">Connect your wallet to view your portfolio</h2>
+    <div class="trade" id="connect"></div>
+    <p class="note" data-zh="连接只会把你的地址告诉本页。不需要签名，也不会动用任何资产。">Connecting only tells this page your address. Nothing is signed and nothing moves.</p>
+  </section>
+
+  <div class="err pf-err" id="err" role="alert"></div>
+
+  <div class="pf locked" id="dash">
+    <div class="pf-stats">
+      <div class="stat total"><div class="k" data-zh="总资产">Net worth</div><div class="v" id="net"></div><div class="m" id="net-m"></div></div>
+      <div class="stat"><div class="k" data-zh="24 小时涨跌">24h change</div><div class="v" id="day"></div><div class="m" id="day-m"></div></div>
+      <div class="stat"><div class="k" data-zh="累计领到的股票">Paid in stock to date</div><div class="v" id="paid"></div><div class="m" id="paid-m"></div></div>
+      <div class="stat"><div class="k" data-zh="资产数">Assets</div><div class="v" id="count"></div><div class="m" id="count-m"></div></div>
+    </div>
+
+    <div class="pf-charts">
+      <div class="card pf-chart">
+        <h3 data-zh="资产分布">Allocation</h3>
+        <div class="pf-donut" id="donut-kind"></div>
+        <ul class="pf-legend" id="legend-kind"></ul>
+      </div>
+      <div class="card pf-chart">
+        <h3 data-zh="押注的股票">Stock exposure</h3>
+        <div class="pf-donut" id="donut-stock"></div>
+        <ul class="pf-legend" id="legend-stock"></ul>
+      </div>
+      <div class="card pf-chart">
+        <h3 data-zh="最大持仓">Top holdings</h3>
+        <div class="pf-bars" id="bars"></div>
+      </div>
+    </div>
+
+    <div class="bar pf-bar">
+      <h2 class="sec" data-zh="资产">Assets</h2>
+      <div class="seg" id="tabs">
+        <button data-k="all" class="on" type="button" data-zh="全部">All</button>
+        <button data-k="meme" type="button" data-zh="股票 Meme">Stock memes</button>
+        <button data-k="stock" type="button" data-zh="代币化股票">Tokenized stock</button>
+        <button data-k="cash" type="button" data-zh="现金">Cash</button>
+      </div>
+    </div>
+    <div class="tablewrap"><table class="holdings">
+      <thead><tr><th data-zh="资产">Asset</th><th data-zh="价格">Price</th><th data-zh="余额">Balance</th><th data-zh="价值">Value</th><th>24h</th><th data-zh="占比">Share</th><th></th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table></div>
+    <div class="pf-more"><button class="btn plain small" id="more" type="button" hidden></button></div>
+    <p class="note pf-note" id="thin" hidden></p>
+    <p class="note pf-note" id="odd" hidden></p>
+  </div>
+
+  <p class="note" style="margin: 34px auto 0; text-align: center;" data-zh="余额读自 BNB Chain。股票 Meme 的价值，是把全部持仓卖进它自己的资金池、在扣除该币自身税费之前能拿到的金额，所以大户在浅池子里的持仓会低于“价格 × 数量”。以某只股票计价的 Meme 会跟着这只股票涨跌，所以在“押注的股票”里和直接持有的股票算在一起。24 小时涨跌来自币安 Web3 行情 API，工资记录来自币安 Web3 钱包 API。这不是投资建议。">Balances are read from BNB Chain. A stock meme's value is what selling the whole holding into its own pool would pay, before the coin's own tax, so a large holder in a shallow pool is worth less than price times balance. A meme quoted in a stock moves with that stock, so Stock exposure counts it together with the shares held directly. The 24h change comes from the Binance Web3 Market API and pay history from the Binance Web3 Wallet API. This is not investment advice.</p>
+</div>
+
+<script src="shared.js"></script>
+<script src="trade.js"></script>
+<script>
+initLang();
+// me: the connected wallet. data: its portfolio. slip: its pay history, which arrives a little later.
+const F = { me: null, data: null, slip: null, run: 0, tab: 'all', all: false, state: 'locked' };
+const FIRST = 10;
+const INK = '#121212', SOFT = '#e6dfca';
+const KINDS = { meme: ['#ffd400', t('Stock memes', '股票 Meme')], stock: ['#ff6a13', t('Tokenized stock', '代币化股票')], cash: ['#0a8a55', t('Cash', '现金')] };
+// Slice colours for the stocks, in order of size. The last is everything else.
+const SHADES = ['#ffd400', '#ff6a13', '#0a8a55', '#121212', '#b9a26a', SOFT];
+
+const money = (n) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const share = (part, whole) => (whole > 0 ? part / whole * 100 : 0);
+const percent = (p) => (p >= 10 ? p.toFixed(0) : p >= 0.1 ? p.toFixed(1) : p > 0 ? '<0.1' : '0') + '%';
+const signed = (n) => (n >= 0 ? '+' : '−') + usd(Math.abs(n));
+const sk = (w) => { const s = el('span', 'sk'); s.style.width = w + 'px'; return s; };
+// A logo with its letter underneath, so a slow or missing image never leaves an empty circle.
+function badge(logo, label) {
+  const box = avatar(logo, label), img = box.querySelector('img');
+  if (img) { box.dataset.l = (label || '?').slice(0, 1).toUpperCase(); img.addEventListener('error', () => { delete box.dataset.l; }); }
+  return box;
+}
+const svg = (tag, attrs) => { const n = document.createElementNS('http://www.w3.org/2000/svg', tag); for (const k in attrs) n.setAttribute(k, attrs[k]); return n; };
+
+// A ring chart. With no slices it is the grey placeholder shown before a wallet connects.
+function donut(box, slices, big, small) {
+  const total = slices.reduce((a, s) => a + s.value, 0);
+  const pic = svg('svg', { viewBox: '0 0 42 42', role: 'img', 'aria-label': total ? slices.map((s) => `${s.name} ${percent(share(s.value, total))}`).join(', ') : t('No data yet', '暂无数据') });
+  const ring = (width, color, extra) => pic.append(svg('circle', { cx: 21, cy: 21, r: 15.915, fill: 'none', stroke: color, 'stroke-width': width, ...extra }));
+  ring(7.3, INK);
+  // Slices sit on an ink ring, so the gaps between them read as outlines.
+  ring(6, total ? INK : SOFT);
+  let at = 0;
+  for (const s of slices) {
+    const p = share(s.value, total);
+    if (p <= 0) continue;
+    const len = slices.length > 1 ? Math.max(p - 0.7, 0.3) : 100;
+    ring(6, s.color, { 'stroke-dasharray': `${len} ${100 - len}`, 'stroke-dashoffset': (125 - at) % 100 });
+    at += p;
+  }
+  const mid = el('div', 'mid');
+  mid.append(el('b', null, big), el('span', null, small));
+  box.replaceChildren(pic, mid);
+}
+
+function legend(list, slices) {
+  const total = slices.reduce((a, s) => a + s.value, 0);
+  list.replaceChildren(...slices.map((s) => {
+    const li = el('li'), sw = el('i');
+    sw.style.background = s.color;
+    li.append(sw, el('span', 'n', s.name), el('span', 'v', usd(s.value)), el('span', 'p', percent(share(s.value, total))));
+    if (s.note) li.title = s.note;
+    return li;
+  }));
+}
+const legendBlank = (list, n) => list.replaceChildren(...Array.from({ length: n }, (_, i) => { const li = el('li'), sw = el('i'); sw.style.background = SOFT; li.append(sw, sk(70 + (i * 23) % 50), sk(44), sk(30)); return li; }));
+
+// Everything the wallet holds as one list, largest first.
+function assets(d) {
+  const list = [];
+  for (const m of d.memes) list.push({
+    kind: 'meme', name: m.coin, sub: t('Stock meme · quoted in ', '股票 Meme · 以 ') + ((zh && m.stockZh) || m.stock) + t('', ' 计价'), logo: m.logo, letter: m.coin,
+    price: m.price, balance: m.balance, value: m.value, mark: m.mark, thin: m.value < m.mark * 0.9, pool: m.poolUsd, change: m.change24,
+    href: 'coin.html?a=' + m.address, act: t('Sell, keep the stock', '卖出，留下股票'),
+  });
+  for (const s of d.stocks) list.push({
+    kind: 'stock', name: stockName(s), short: s.sym, sub: t('Tokenized stock · ', '代币化股票 · ') + s.sym, logo: s.logo, letter: s.ticker || s.sym,
+    price: s.price, balance: s.shares, value: s.value, change: s.change24,
+    href: s.via.length ? 'coin.html?a=' + s.via[0].address + '&side=buy' : 'payslip.html?w=' + d.wallet,
+    act: s.via.length ? t('Buy ', '买入 ') + s.via[0].coin : t('Put it to work', '让它干活'),
+  });
+  for (const c of d.cash) list.push({
+    kind: 'cash', name: c.symbol, sub: t('Cash', '现金'), logo: null, letter: c.symbol,
+    price: c.price, balance: c.balance, value: c.value, change: c.symbol === 'BNB' ? c.change24 : null,
+    href: c.symbol === 'BNB' ? 'coin.html?side=bnb' : null, act: t('Buy a stock meme', '买入股票 Meme'),
+  });
+  return list.sort((a, b) => b.value - a.value);
+}
+
+// ---- before a wallet connects, and while one is being read: placeholders only ----
+function blank() {
+  for (const id of ['net', 'day', 'paid', 'count']) $(id).replaceChildren(sk(id === 'net' ? 150 : 90));
+  $('day').className = 'v';
+  for (const id of ['net-m', 'day-m', 'paid-m', 'count-m']) $(id).replaceChildren(sk(110));
+  donut($('donut-kind'), [], '—', t('allocation', '资产分布'));
+  donut($('donut-stock'), [], '—', t('stocks', '股票'));
+  legendBlank($('legend-kind'), 3); legendBlank($('legend-stock'), 4);
+  $('bars').replaceChildren(...Array.from({ length: 10 }, (_, i) => {
+    const row = el('div', 'row'), track = el('div', 'track'), fill = el('i');
+    fill.style.width = Math.max(92 - i * 9, 8) + '%'; fill.style.background = SOFT;
+    track.append(fill); row.append(sk(64), track, sk(44));
+    return row;
+  }));
+  $('rows').replaceChildren(...Array.from({ length: 5 }, (_, i) => {
+    const tr = el('tr'), who = el('div', 'who'), names = el('div');
+    names.append(sk(80 + (i * 17) % 40), el('br'), sk(120));
+    who.append(el('span', 'ava blank'), names);
+    const td = (cls, w) => { const c = el('td', cls); c.append(sk(w)); return c; };
+    const first = el('td', 'c-name'); first.append(who);
+    tr.append(first, td('c-price', 56), td('c-bal', 60), td('c-worth', 64), td('c-day', 40), td('c-share', 70), td('act', 90));
+    return tr;
+  }));
+  $('more').hidden = true; $('thin').hidden = true; $('odd').hidden = true;
+  F.tab = 'all';
+  for (const b of $('tabs').children) { b.disabled = true; b.classList.toggle('on', b.dataset.k === 'all'); b.textContent = b.textContent.replace(/ · \d+$/, ''); }
+}
+
+function setState(state) {
+  F.state = state;
+  const dash = $('dash');
+  dash.classList.toggle('locked', state === 'locked');
+  dash.classList.toggle('loading', state === 'loading');
+  dash.inert = state !== 'ready';
+  $('gate').hidden = state !== 'locked';
+}
+
+// The wallet in the page header: who is connected, or the way to connect.
+function renderWallet() {
+  const box = $('pf-wallet');
+  if (!F.me) {
+    const b = el('button', 'btn', t('Connect wallet', '连接钱包'));
+    b.type = 'button';
+    b.onclick = () => {
+      // Inside a wallet app there is one button, so the header button presses it. Otherwise show the choices.
+      const only = $('connect').querySelectorAll('button.btn, a.btn');
+      if (only.length === 1 && only[0].tagName === 'BUTTON') return only[0].click();
+      $('gate').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      $('gate').classList.remove('nudge'); void $('gate').offsetWidth; $('gate').classList.add('nudge');
+    };
+    box.replaceChildren(b);
+    return;
+  }
+  const chip = el('span', 'pf-chip'), stamp = el('span', 'addr', F.data ? t('updated ', '更新于 ') + new Date(F.data.updatedAt).toLocaleTimeString(dateLocale, { hour: '2-digit', minute: '2-digit' }) : '');
+  chip.append(el('span', 'dot'), copyable(F.me));
+  const again = el('button', 'btn plain small', t('↻ Refresh', '↻ 刷新')), off = el('button', 'btn plain small', t('Disconnect', '断开'));
+  again.type = off.type = 'button';
+  again.disabled = F.state === 'loading';
+  again.onclick = () => load(F.me, true);
+  off.onclick = forgetWallet;
+  box.replaceChildren(stamp, chip, again, off);
+}
+
+async function ask(path, wallet) {
+  const r = await fetch(path + '?w=' + wallet);
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error || r.status);
+  return j;
+}
+
+async function load(wallet) {
+  const run = ++F.run;
+  $('err').replaceChildren();
+  F.data = null; F.slip = null; F.all = false;
+  blank(); setState('loading'); renderWallet();
+  $('pf-sub').textContent = t('Reading your wallet from BNB Chain…', '正在从 BNB Chain 读取你的钱包…');
+  try {
+    const d = await ask('/api/portfolio', wallet);
+    if (run !== F.run) return;
+    F.data = d;
+    setState('ready'); render();
+    // Pay history takes a few seconds longer, so the page does not wait for it.
+    ask('/api/payslip', d.wallet).then((s) => { if (run === F.run) { F.slip = s; renderPaid(); } }, () => { if (run === F.run) { F.slip = false; renderPaid(); } });
+  } catch (e) {
+    if (run !== F.run) return;
+    setState('loading');
+    const again = el('button', 'copy', t('Try again', '重试'));
+    again.type = 'button'; again.onclick = () => load(wallet);
+    $('err').replaceChildren(document.createTextNode(t('Could not read your wallet: ', '无法读取你的钱包：') + e.message + '. '), again);
+  } finally {
+    if (run === F.run) { $('pf-sub').textContent = t('Your stock memes, tokenized stock and cash on BNB Chain.', '你在 BNB Chain 上的股票 Meme、代币化股票和现金。'); renderWallet(); }
+  }
+}
+
+// Back to placeholders: no wallet, no data.
+function lock() {
+  F.run++; F.data = null; F.slip = null;
+  $('err').replaceChildren();
+  blank(); setState('locked'); renderWallet();
+}
+
+function render() {
+  const d = F.data, list = F.list = assets(d);
+  $('net').textContent = money(d.total);
+  $('net-m').textContent = t('what it could sell for today', '今天能卖出的金额');
+
+  const dv = $('day'), dm = $('day-m');
+  if (d.day && d.day.covered >= 0.5) {
+    dv.textContent = signed(d.day.usd); dv.className = 'v ' + (d.day.usd >= 0 ? 'up' : 'down');
+    dm.textContent = pct(d.day.pct) + (d.day.covered < 0.98 ? (zh ? ` · 覆盖 ${Math.round(d.day.covered * 100)}% 的持仓` : ` · over ${Math.round(d.day.covered * 100)}% of holdings`) : '');
+  } else {
+    dv.textContent = '—'; dv.className = 'v';
+    dm.textContent = d.total > 0 ? t('24h prices unavailable right now', '暂时拿不到 24 小时行情') : t('nothing held yet', '暂无持仓');
+  }
+  renderPaid();
+  $('count').textContent = String(list.length);
+  $('count-m').textContent = zh ? `${d.memes.length} 个 Meme · ${d.stocks.length} 只股票 · ${d.cash.length} 种现金` : `${d.memes.length} meme${d.memes.length === 1 ? '' : 's'} · ${d.stocks.length} stock${d.stocks.length === 1 ? '' : 's'} · ${d.cash.length} cash`;
+
+  // Allocation: the three kinds of asset.
+  const kinds = [['meme', d.parts.memes], ['stock', d.parts.stocks], ['cash', d.parts.cash]].map(([k, v]) => ({ name: KINDS[k][1], color: KINDS[k][0], value: v }));
+  donut($('donut-kind'), d.total > 0 ? kinds : [], d.total > 0 ? usd(d.total) : '$0', t('net worth', '总资产'));
+  legend($('legend-kind'), kinds);
+
+  // Stock exposure: the five largest stocks and the rest.
+  const top = d.exposure.slice(0, 5), rest = d.exposure.slice(5).reduce((a, e) => a + e.total, 0);
+  const stocks = top.map((e, i) => ({
+    name: stockName(e), color: SHADES[i], value: e.total,
+    note: [e.direct > 0 && t('direct ', '直接持有 ') + usd(e.direct), e.viaMemes > 0 && t('through ', '通过 ') + e.memes.slice(0, 3).join(', ') + ' ' + usd(e.viaMemes)].filter(Boolean).join(' · '),
+  }));
+  if (rest > 0) stocks.push({ name: zh ? `其他 ${d.exposure.length - 5} 只` : `${d.exposure.length - 5} more`, color: SHADES[5], value: rest });
+  donut($('donut-stock'), stocks, String(d.exposure.length), d.exposure.length === 1 ? t('stock', '只股票') : t('stocks', '只股票'));
+  if (stocks.length) legend($('legend-stock'), stocks);
+  else $('legend-stock').replaceChildren(el('li', 'none', t('No stock exposure yet. Stock memes and stock tokens show here.', '还没有股票敞口。股票 Meme 和股票代币会显示在这里。')));
+
+  // Top holdings: the ten largest lines against the largest.
+  const lead = list.slice(0, 10), most = lead[0]?.value || 1;
+  $('bars').replaceChildren(...(lead.length ? lead.map((a) => {
+    const row = el('div', 'row'), track = el('div', 'track'), fill = el('i');
+    fill.style.width = Math.max(a.value / most * 100, 2) + '%'; fill.style.background = KINDS[a.kind][0];
+    track.append(fill);
+    const name = el('span', 'n', a.short || a.name); name.title = a.name;
+    row.append(name, track, el('b', null, usd(a.value)));
+    return row;
+  }) : [el('p', 'note', t('Nothing held yet.', '暂无持仓。'))]));
+
+  const n = { all: list.length, meme: d.memes.length, stock: d.stocks.length, cash: d.cash.length };
+  for (const b of $('tabs').children) { b.disabled = false; b.textContent = b.textContent.replace(/ · \d+$/, '') + ' · ' + n[b.dataset.k]; }
+  renderRows();
+
+  const thin = list.filter((a) => a.thin);
+  $('thin').hidden = !thin.length;
+  if (thin.length) $('thin').textContent = zh
+    ? `${thin.length} 个 Meme 持仓比它的资金池按当前价格付得出的还多，所以按资金池实际能付的金额计价（红色虚线）。`
+    : `${thin.length} meme holding${thin.length === 1 ? ' is' : 's are'} larger than ${thin.length === 1 ? 'its' : 'their'} pool can pay for at the quoted price, so ${thin.length === 1 ? 'it is' : 'they are'} valued at what the pool would pay (dotted red).`;
+  $('odd').hidden = !d.odd.length;
+  if (d.odd.length) $('odd').textContent = t('Not counted: ', '未计入：') + d.odd.slice(0, 5).map((o) => o.coin).join(', ') + (d.odd.length > 5 ? ' +' + (d.odd.length - 5) : '') + t('. These tokens report a balance larger than their own supply.', '。这些代币报告的余额超过了它们自己的总供应量。');
+}
+
+// Filled in when the pay history arrives.
+function renderPaid() {
+  const v = $('paid'), m = $('paid-m'), s = F.slip, d = F.data;
+  if (!d) return;
+  m.replaceChildren();
+  if (s == null) { v.replaceChildren(sk(90)); m.textContent = t('reading pay history', '正在读取工资记录'); return; }
+  // No payouts and no history means the history could not be read, not that there is none.
+  if (s === false || (!s.paid && !s.history)) { v.textContent = '—'; m.textContent = t('pay history unavailable right now', '暂时拿不到工资记录'); return; }
+  if (!s.paid) { v.textContent = '$0'; m.textContent = t('no payouts found yet', '还没有发现分红'); return; }
+  v.textContent = (s.paid.atLeast ? '≥ ' : '') + usd(s.paid.usd);
+  const a = el('a', 'folio-link', zh ? `${s.paid.count}${s.paid.atLeast ? '+' : ''} 次发放 · 看工资条 →` : `${s.paid.count}${s.paid.atLeast ? '+' : ''} payouts · open payslip →`);
+  a.href = 'payslip.html?w=' + d.wallet;
+  m.append(a);
+}
+
+function renderRows() {
+  const d = F.data, all = F.list.filter((a) => F.tab === 'all' || a.kind === F.tab), list = F.all ? all : all.slice(0, FIRST);
+  const cell = (cls, ...kids) => { const td = el('td', cls); td.append(...kids.filter((k) => k != null)); return td; };
+  $('rows').replaceChildren(...(list.length ? list.map((a) => {
+    const tr = el('tr'), who = el('div', 'who'), names = el('div');
+    names.append(el('span', 'coin', a.name), el('span', 'addr', a.sub));
+    who.append(badge(a.logo, a.letter), names);
+    const value = [el('span', null, usd(a.value))];
+    if (a.thin) { const s = el('span', 'addr', t('price says ', '按价格算 ') + usd(a.mark)); s.title = t('The pool holds ', '资金池里只有 ') + usd(a.pool) + t(' of stock, so it cannot pay the quoted price for a holding this large.', ' 的股票，付不出这么大持仓的报价。'); value.push(s); tr.classList.add('thin'); }
+    const day = el('span', a.change == null ? 'addr' : a.change >= 0 ? 'up' : 'down', a.change == null ? '—' : pct(a.change));
+    day.style.display = 'inline';
+    const p = share(a.value, d.total), meter = el('div', 'meter'), fill = el('i');
+    fill.style.width = Math.max(p, 1) + '%'; fill.style.background = KINDS[a.kind][0];
+    meter.append(fill);
+    const bal = cell('c-bal', el('span', null, num(a.balance)));
+    bal.dataset.label = a.kind === 'stock' ? t('Shares', '股数') : t('Balance', '余额');
+    const act = el('td', 'act');
+    if (a.href) { const link = el('a', null, a.act + ' →'); link.href = a.href; act.append(link); }
+    tr.append(cell('c-name', who), cell('c-price', el('span', null, usd(a.price))), bal, cell('c-worth', ...value), cell('c-day', day), cell('c-share', meter, el('span', 'addr', percent(p))), act);
+    return tr;
+  }) : [(() => { const tr = el('tr'), td = el('td', 'none', d.total < 0.01 && F.tab === 'all' ? t('This wallet holds no stock memes, tokenized stock or cash yet. Pick a stock meme from the League to start.', '这个钱包还没有股票 Meme、代币化股票或现金。去排行榜挑一个股票 Meme 开始吧。') : t('Nothing of this kind in your wallet.', '你的钱包里没有这一类资产。')); td.colSpan = 7; tr.append(td); return tr; })()]));
+  const b = $('more');
+  b.hidden = all.length <= FIRST;
+  b.textContent = F.all ? t('Show fewer', '收起') : (zh ? `显示全部 ${all.length} 项` : `Show all ${all.length}`);
+}
+
+$('more').onclick = () => { F.all = !F.all; renderRows(); };
+$('tabs').onclick = (e) => {
+  const k = e.target.dataset.k;
+  if (!k || !F.data) return;
+  F.tab = k; F.all = false;
+  for (const b of $('tabs').children) b.classList.toggle('on', b.dataset.k === k);
+  renderRows();
+};
+
+// The same wallet buttons as the Trade page, used here only to learn the address. Nothing shows
+// until a wallet is connected; a wallet connected on an earlier visit is picked up again.
+blank(); setState('locked'); renderWallet();
+const gate = tradeFlow($('connect'), () => ({
+  view: true, link: location.origin + location.pathname,
+  words: {
+    desk: t('Choose your wallet:', '选择你的钱包：'),
+    phone: t('On your phone, open this page inside your wallet app, or connect any other wallet with WalletConnect:', '在手机上，请在钱包 App 里打开本页，或用 WalletConnect 连接其他任何钱包：'),
+    copy: t('Copy this page’s link', '复制本页链接'),
+  },
+  seen(wallet) {
+    const next = wallet ? wallet.toLowerCase() : null;
+    if (next === F.me) return;
+    F.me = next;
+    if (next) load(next); else lock();
+  },
+}));
+gate.render();
+</script>
+</body>
+</html>

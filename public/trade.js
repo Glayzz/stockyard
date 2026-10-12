@@ -22,13 +22,30 @@ const listen = (p) => { if (!p?.on || HEARD.has(p)) return; HEARD.add(p); p.on('
 // the same wallets everywhere and connect to the exact one chosen.
 const FOUND = new Map();
 const KNOWN = [['Binance Wallet', /binance/], ['MetaMask', /metamask/], ['Trust Wallet', /trust/], ['OKX Wallet', /okx|okex/], ['Bitget Wallet', /bitget|bitkeep/]];
+// The browser wallet chosen last time is picked up again on the next page without asking, as long
+// as it still allows this site. "Change wallet" forgets it.
+const BROWSER = 'browser';
+const lastWallet = () => { try { return localStorage.getItem('stockyard:wallet'); } catch { return null; } };
+const rememberWallet = (id) => { try { id ? localStorage.setItem('stockyard:wallet', id) : localStorage.removeItem('stockyard:wallet'); } catch {} };
+async function resume(provider) {
+  if (WALLET || PROVIDER || !provider?.request) return;
+  try {
+    // eth_accounts never opens the wallet: it only answers if this site was allowed before.
+    const list = await provider.request({ method: 'eth_accounts' });
+    if (!list?.[0] || WALLET || PROVIDER) return;
+    listen(provider); PROVIDER = provider; onAccounts(list);
+  } catch {}
+}
 window.addEventListener('eip6963:announceProvider', (e) => {
   const { info, provider } = e.detail || {};
   if (!info?.rdns || !provider || FOUND.has(info.rdns)) return;
   FOUND.set(info.rdns, { name: String(info.name || info.rdns).slice(0, 24), key: (info.rdns + ' ' + (info.name || '')).toLowerCase(), provider });
+  if (lastWallet() === info.rdns) resume(provider);
   if (!WALLET) for (const f of FLOWS) f.render();
 });
 window.dispatchEvent(new Event('eip6963:requestProvider'));
+// A wallet that does not announce itself still sits at window.ethereum.
+if (lastWallet() === BROWSER) setTimeout(() => resume(window.ethereum), 0);
 
 // WalletConnect reaches any wallet app from an ordinary browser: a list of wallets on a phone,
 // a QR code on a computer. Its code is 2 MB (public/vendor, built from
@@ -52,6 +69,12 @@ try {
     if (wc.session && wc.accounts[0]) { PROVIDER = wc; onAccounts(wc.accounts); } else remember(false);
   }, () => {});
 } catch {}
+
+// Lets go of the wallet in use. The next page will not pick it up again by itself.
+function forgetWallet() {
+  if (WC && PROVIDER === WC) { remember(false); WC.disconnect().catch(() => {}); }
+  rememberWallet(null); PROVIDER = null; onAccounts([]);
+}
 
 function tradeFlow(box, job) {
   // plan: what the server prepared. stage: where a running trade has got to.
@@ -96,7 +119,14 @@ function tradeFlow(box, job) {
     if (stage) { steps(stage.step, stage.two); say(stage.text); return; }
     if (note) say(note.text, note.bad ? 'down' : null);
     if (!j) return;
-    if (!WALLET) { howToConnect(j); return; }
+    if (!WALLET) { j.seen?.(null); howToConnect(j); return; }
+    // A page that only needs to know the wallet, such as the portfolio, stops here.
+    if (j.view) {
+      j.seen?.(WALLET);
+      say(t('Connected: ', '已连接：') + short(WALLET) + (WC && PROVIDER === WC ? ' · WalletConnect' : ''));
+      changeWallet();
+      return;
+    }
     if (j.owner && j.owner.toLowerCase() !== WALLET.toLowerCase()) {
       say(zh ? `已连接的钱包 ${short(WALLET)} 不是这张工资条上的钱包。请在钱包里切换到 ${short(j.owner)}。` : `The connected wallet ${short(WALLET)} is not the one on this payslip. Switch to ${short(j.owner)} in your wallet.`, 'down');
       return;
@@ -105,16 +135,20 @@ function tradeFlow(box, job) {
     const ready = plan && planFor === keyOf(j) ? plan : null;
     if (ready && !ready.wallet.enough) say(zh ? `钱包 ${short(WALLET)} 只有 ${j.spend.text(ready.wallet.balance)}。` : `Wallet ${short(WALLET)} holds only ${j.spend.text(ready.wallet.balance)}.`, 'down');
     else say(t('Wallet ', '钱包 ') + short(WALLET) + (WC && PROVIDER === WC ? ' · WalletConnect' : '') + (ready ? ' · ' + (ready.wallet.needsApproval ? t('you will confirm twice: once to allow the token, once to swap', '需要在钱包里确认两次：先授权，再兑换') : t('you will confirm once in your wallet', '只需在钱包里确认一次')) : ''));
-    const change = el('button', 'copy', t('Change wallet', '更换钱包'));
-    change.type = 'button';
-    change.onclick = () => { if (WC && PROVIDER === WC) { remember(false); WC.disconnect().catch(() => {}); } PROVIDER = null; onAccounts([]); };
-    box.append(change);
+    changeWallet();
     // Get the trade ready before the click, so the click goes straight to the wallet.
     if (!ready) prepare(j).then(() => { if (!stage) render(); }, () => {});
   }
 
+  function changeWallet() {
+    const change = el('button', 'copy', t('Change wallet', '更换钱包'));
+    change.type = 'button';
+    change.onclick = forgetWallet;
+    box.append(change);
+  }
+
   // No wallet connected yet. The same wallets are offered by name everywhere; what a button does
-  // depends on where the page is open.
+  // depends on where the page is open. A job may bring its own wording in job.words.
   function howToConnect(j) {
     const found = [...FOUND.values()];
     // Inside a wallet app's own browser there is exactly one wallet: offer it and nothing else.
@@ -123,7 +157,7 @@ function tradeFlow(box, job) {
     if (PHONE) return noWallet(j);
     // On a computer a wallet found in this browser connects directly, and the others open a QR
     // code for the wallet app on a phone, through WalletConnect.
-    say(t('Connect a wallet to trade:', '连接钱包以交易：'));
+    say(j.words?.desk || t('Connect a wallet to trade:', '连接钱包以交易：'));
     const row = el('div', 'wallets');
     const add = (name, here, fn) => { const b = el('button', 'btn' + (here ? '' : ' plain'), name); b.type = 'button'; b.onclick = fn; row.append(b); };
     const used = new Set();
@@ -162,7 +196,7 @@ function tradeFlow(box, job) {
     const link = ([name, href], i) => { const a = el('a', 'btn' + (i ? ' plain' : ''), name); a.href = href; a.rel = 'noopener'; row.append(a); };
     // Copying the link works with every wallet that has a browser, on any network. If the
     // browser will not copy, the link is shown instead, selected and ready to copy by hand.
-    const label = WALLETCONNECT_ID ? t('Copy this trade\'s link', '复制这笔交易的链接') : t('Other · copy link', '其他 · 复制链接');
+    const label = WALLETCONNECT_ID ? (j.words?.copy || t('Copy this trade\'s link', '复制这笔交易的链接')) : t('Other · copy link', '其他 · 复制链接');
     const other = el('button', WALLETCONNECT_ID ? 'copy' : 'btn plain', label);
     other.type = 'button';
     const shown = el('input', 'linkfield');
@@ -175,7 +209,7 @@ function tradeFlow(box, job) {
     // wallet connects from here. The direct links stay because some phone networks block
     // WalletConnect's server.
     if (WALLETCONNECT_ID) {
-      say(t('To trade on your phone, open this page inside your wallet app, or connect any other wallet with WalletConnect:', '在手机上交易，请在钱包 App 里打开本页，或用 WalletConnect 连接其他任何钱包：'));
+      say(j.words?.phone || t('To trade on your phone, open this page inside your wallet app, or connect any other wallet with WalletConnect:', '在手机上交易，请在钱包 App 里打开本页，或用 WalletConnect 连接其他任何钱包：'));
       apps.slice(0, 5).forEach(link);
       const wc = el('button', 'btn plain', 'WalletConnect');
       wc.type = 'button'; wc.onclick = () => connect(true);
@@ -183,11 +217,11 @@ function tradeFlow(box, job) {
       box.append(row, other, shown);
       return;
     }
-    say(t('To trade on your phone, open this page inside your wallet app:', '在手机上交易，请在钱包 App 里打开本页：'));
+    say(j.words?.phone || t('To trade on your phone, open this page inside your wallet app:', '在手机上交易，请在钱包 App 里打开本页：'));
     apps.forEach(link);
     row.append(other);
     box.append(row, shown);
-    say(t('It opens there with this trade filled in and a Connect wallet button. With any other wallet, copy the link and paste it into the wallet\'s own browser.', '打开后这笔交易已填好，并会出现「连接钱包」按钮。其他钱包：复制链接，粘贴到钱包自带的浏览器里。'));
+    if (!j.view) say(t('It opens there with this trade filled in and a Connect wallet button. With any other wallet, copy the link and paste it into the wallet\'s own browser.', '打开后这笔交易已填好，并会出现「连接钱包」按钮。其他钱包：复制链接，粘贴到钱包自带的浏览器里。'));
   }
 
   // via is true for WalletConnect, or the wallet to use; anything else means the browser's own.
@@ -214,6 +248,7 @@ function tradeFlow(box, job) {
         listen(wallet);
         [account] = await wallet.request({ method: 'eth_requestAccounts' });
         PROVIDER = wallet;
+        rememberWallet([...FOUND.entries()].find(([, w]) => w.provider === wallet)?.[0] || BROWSER);
       }
       if (parseInt(await PROVIDER.request({ method: 'eth_chainId' })) !== 56)
         await PROVIDER.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x38' }] });
@@ -251,6 +286,9 @@ function tradeFlow(box, job) {
     note = null; slip.replaceChildren();
     try {
       stage = { step: 0, two: false, text: t('Getting your trade ready…', '正在准备交易…') }; render();
+      // The wallet may have been switched to another network since it was connected.
+      if (parseInt(await PROVIDER.request({ method: 'eth_chainId' })) !== 56)
+        await PROVIDER.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x38' }] });
       let p = await prepare(j);
       if (!p.wallet.enough) return fail(zh ? `钱包 ${short(WALLET)} 只有 ${j.spend.text(p.wallet.balance)}。` : `Wallet ${short(WALLET)} holds only ${j.spend.text(p.wallet.balance)}.`);
       const two = p.wallet.needsApproval;

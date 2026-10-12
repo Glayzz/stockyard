@@ -17,7 +17,7 @@ const FRESH = 600000, STAND_IN = 6 * 3600000;
 
 // What the wallet holds of every stock token, in one on-chain read. With 534 stock tokens the
 // Wallet API's 20-per-call balance endpoint would take 27 calls, so it is kept for payout history.
-async function stockLines(wallet, lg) {
+export async function stockLines(wallet, lg) {
   const bal = await multicallAll(stocks.map((s) => [s.address, '70a08231' + addrWord(wallet)]));
   return stocks.map((s, i) => {
     const shares = bal[i] ? toNum(bal[i]) : 0, price = lg.stocks[s.symbol]?.price || 0;
